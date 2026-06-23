@@ -31,7 +31,7 @@ export function Editor({ doc }: Props) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    readFile(doc.handle).then((t) => {
+    readFile(doc.path).then((t) => {
       if (cancelled) return
       setText(t)
       setSaved(true)
@@ -40,12 +40,12 @@ export function Editor({ doc }: Props) {
     return () => {
       cancelled = true
     }
-  }, [doc.path, doc.handle])
+  }, [doc.path])
 
   const save = useCallback(async () => {
-    await writeFile(doc.handle, text)
+    await writeFile(doc.path, text)
     setSaved(true)
-  }, [doc.handle, text])
+  }, [doc.path, text])
 
   // 최신 text/saved를 ref로 추적 — 언마운트 시점에 최신값을 읽기 위함
   const textRef = useRef(text)
@@ -59,8 +59,8 @@ export function Editor({ doc }: Props) {
   // App에서 <Editor key={doc.path} />로 문서마다 재마운트하므로 cleanup의 doc은 떠나는 문서다.
   useEffect(() => {
     return () => {
-      // 삭제된 파일이었거나 권한 만료면 실패할 수 있음 — best-effort라 조용히 무시
-      if (!savedRef.current) void writeFile(doc.handle, textRef.current).catch(() => {})
+      // 삭제된 파일이었으면 실패할 수 있음 — best-effort라 조용히 무시
+      if (!savedRef.current) void writeFile(doc.path, textRef.current).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

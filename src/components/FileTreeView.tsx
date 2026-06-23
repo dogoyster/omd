@@ -3,6 +3,11 @@ import type { MouseEvent } from 'react'
 import type { TreeNode } from '../types'
 import { isProtectedFolder } from '../fs/vault'
 
+/** 표시용 이름: .md 확장자 제거 + 하이픈을 공백으로 (실제 파일명은 그대로) */
+function displayName(name: string): string {
+  return name.replace(/\.md$/i, '').replace(/-+/g, ' ')
+}
+
 interface Props {
   nodes: TreeNode[]
   selectedPath: string | null
@@ -88,7 +93,7 @@ function TreeItem({ node, selectedPath, onSelect, onRename, onDelete, onContextM
           onContextMenu={(e) => onContextMenu(e, node)}
         >
           <span className="caret">{children.length > 0 ? (open ? '▾' : '▸') : ''}</span>
-          <span className="tree-name">{node.name}</span>
+          <span className="tree-name">{displayName(node.name)}</span>
           {!locked && <RowActions node={node} onRename={onRename} onDelete={onDelete} />}
         </div>
         {open && children.length > 0 && (
@@ -120,7 +125,7 @@ function TreeItem({ node, selectedPath, onSelect, onRename, onDelete, onContextM
         onContextMenu={(e) => onContextMenu(e, node)}
       >
         <span className="caret" />
-        <span className="tree-name">{node.name.replace(/\.md$/i, '')}</span>
+        <span className="tree-name">{displayName(node.name)}</span>
         <RowActions node={node} onRename={onRename} onDelete={onDelete} />
       </div>
     </li>

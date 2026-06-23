@@ -7,25 +7,28 @@ import { KanbanBoard } from './components/KanbanBoard'
 import { SearchModal } from './components/SearchModal'
 import { ContextMenu } from './components/ContextMenu'
 import type { CtxItem } from './components/ContextMenu'
+import { Modal } from './components/Modal'
+import type { ModalState } from './components/Modal'
 import {
+  areaHasContent,
   buildSearchIndex,
   buildTree,
   createColumn,
   createDir,
   createFile,
   deleteEntry,
-  ensurePermission,
-  getAreaDir,
   isProtectedFolder,
   loadBoard,
   moveCard,
   pickVault,
   renameEntry,
+  scaffoldVault,
+  setVaultRoot,
 } from './fs/vault'
-import { loadVaultHandle, saveVaultHandle } from './fs/idb'
+import { loadVaultPath, saveVaultPath } from './fs/store'
 
 type View = 'kanban' | 'editor'
-type Phase = 'init' | 'need-connect' | 'need-permission' | 'ready' | 'unsupported'
+type Phase = 'init' | 'need-connect' | 'onboarding' | 'ready'
 
 const DEFAULT_PATH_HINT =
   'Google Drive·iCloud 같은 동기화 폴더 안의 마크다운 폴더를 고르면, 동기화는 OS가 알아서 처리합니다.'
@@ -37,8 +40,7 @@ function sanitizeName(s: string): string {
 
 function App() {
   const [phase, setPhase] = useState<Phase>('init')
-  const [root, setRoot] = useState<FileSystemDirectoryHandle | null>(null)
-  const [pending, setPending] = useState<FileSystemDirectoryHandle | null>(null)
+  const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [area, setArea] = useState<Area>(
     () => (localStorage.getItem('omd.area') as Area | null) ?? 'Work',
   )
@@ -52,58 +54,39 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchEntries, setSearchEntries] = useState<SearchEntry[]>([])
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null)
+  const [modal, setModal] = useState<ModalState | null>(null)
 
-  // 브라우저 지원 확인 + 저장된 vault 핸들 복원
+  // window.prompt/confirm 대체 (Tauri 웹뷰 미지원) — Promise로 모달 결과를 기다린다
+  function askInput(title: string, initial = ''): Promise<string | null> {
+    return new Promise((resolve) => setModal({ kind: 'input', title, initial, resolve }))
+  }
+  function askConfirm(title: string): Promise<boolean> {
+    return new Promise((resolve) => setModal({ kind: 'confirm', title, resolve }))
+  }
+
+  // 저장된 vault 경로 복원
   useEffect(() => {
-    if (typeof window.showDirectoryPicker !== 'function') {
-      setPhase('unsupported')
-      return
+    const saved = loadVaultPath()
+    if (saved) {
+      void activateVault(saved, false)
+    } else {
+      setPhase('need-connect')
     }
-    let cancelled = false
-    loadVaultHandle().then(async (saved) => {
-      if (cancelled) return
-      if (!saved) {
-        setPhase('need-connect')
-        return
-      }
-      const state = (await saved.queryPermission?.({ mode: 'readwrite' })) ?? 'prompt'
-      if (state === 'granted') {
-        setRoot(saved)
-        setPhase('ready')
-      } else {
-        // 권한 재요청은 사용자 제스처(클릭) 안에서만 가능
-        setPending(saved)
-        setPhase('need-permission')
-      }
-    })
-    return () => {
-      cancelled = true
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const reload = useCallback(async () => {
-    if (!root) return
-    const areaDir = await getAreaDir(root, area)
-    if (!areaDir) {
-      setTree([])
-      setColumns([])
-      return
-    }
-    const [t, b] = await Promise.all([buildTree(areaDir, area), loadBoard(areaDir, area)])
+    if (!vaultPath) return
+    const [t, b] = await Promise.all([buildTree(area), loadBoard(area)])
     setTree(t)
     setColumns(b)
-  }, [root, area])
+  }, [vaultPath, area])
 
   const openSearch = useCallback(async () => {
-    if (!root) return
-    const areaDir = await getAreaDir(root, area)
-    if (!areaDir) {
-      setError('이 영역에 폴더가 없어요.')
-      return
-    }
-    setSearchEntries(await buildSearchIndex(areaDir, area))
+    if (!vaultPath) return
+    setSearchEntries(await buildSearchIndex(area))
     setSearchOpen(true)
-  }, [root, area])
+  }, [vaultPath, area])
 
   useEffect(() => {
     void reload()
@@ -129,45 +112,45 @@ function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [openSearch])
 
-  async function connect() {
-    try {
-      const handle = await pickVault()
-      await saveVaultHandle(handle)
-      setRoot(handle)
-      setPending(null)
-      setPhase('ready')
-      setError(null)
-    } catch (e) {
-      // 사용자가 picker를 취소하면 AbortError — 조용히 무시
-      if ((e as DOMException)?.name !== 'AbortError') setError(String(e))
-    }
+  async function activateVault(path: string, save: boolean) {
+    setVaultRoot(path)
+    if (save) saveVaultPath(path)
+    setVaultPath(path)
+    // vault가 완전히 비었으면(영역 폴더 없음) 온보딩으로
+    const empty = !(await areaHasContent('Work')) && !(await areaHasContent('Personal'))
+    setPhase(empty ? 'onboarding' : 'ready')
+    setError(null)
   }
 
-  async function grant() {
-    if (!pending) return
-    const ok = await ensurePermission(pending)
-    if (ok) {
-      setRoot(pending)
-      setPending(null)
+  async function connect() {
+    const path = await pickVault()
+    if (!path) return // 취소
+    await activateVault(path, true)
+  }
+
+  async function handleScaffold() {
+    try {
+      await scaffoldVault()
       setPhase('ready')
-    } else {
-      setError('폴더 접근 권한이 거부됐어요.')
+      await reload()
+    } catch (e) {
+      setError('초기화 실패: ' + String(e))
     }
   }
 
   function openNode(node: TreeNode) {
     if (node.kind !== 'file') return
-    setDoc({ path: node.path, handle: node.handle as FileSystemFileHandle })
+    setDoc({ path: node.path })
     setView('editor')
   }
 
   function openCard(card: KanbanCard) {
-    setDoc({ path: card.path, handle: card.handle })
+    setDoc({ path: card.path })
     setView('editor')
   }
 
   function openSearchResult(entry: SearchEntry) {
-    setDoc({ path: entry.path, handle: entry.handle })
+    setDoc({ path: entry.path })
     setView('editor')
     setSearchOpen(false)
   }
@@ -189,22 +172,25 @@ function App() {
     )
 
     try {
-      await moveCard(card, fromCol, toCol)
+      await moveCard(cardPath, toCol.path)
     } catch (e) {
       setError('이동 실패: ' + String(e))
     }
-    // 경로/핸들을 실제 파일 위치와 정합화
     void reload()
   }
 
   async function handleNewCard(col: KanbanColumn) {
-    const title = window.prompt('새 카드 제목')?.trim()
+    const title = (await askInput('새 카드 제목'))?.trim()
     if (!title) return
-    const slug = title.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, '-')
+    const slug = sanitizeName(title).replace(/\s+/g, '-')
+    if (!slug) {
+      setError('제목에 쓸 수 있는 문자가 없어요.')
+      return
+    }
     const today = new Date().toISOString().slice(0, 10)
     const content = `---\nproject: \npriority: mid\ncreated: ${today}\ndue: \ntags: []\nsource: \n---\n\n# ${title}\n\n`
     try {
-      await createFile(col.handle, `${slug}.md`, content)
+      await createFile(col.path, `${slug}.md`, content)
       await reload()
     } catch (e) {
       setError('생성 실패: ' + String(e))
@@ -213,7 +199,7 @@ function App() {
 
   async function handleRenameNode(node: TreeNode) {
     const label = node.kind === 'file' ? '새 파일 이름' : '새 폴더 이름'
-    const raw = window.prompt(label, node.name)?.trim()
+    const raw = (await askInput(label, node.name))?.trim()
     if (!raw || raw === node.name) return
     const clean = sanitizeName(raw)
     if (!clean) {
@@ -223,7 +209,7 @@ function App() {
     const newName =
       node.kind === 'file' && !clean.toLowerCase().endsWith('.md') ? `${clean}.md` : clean
     try {
-      await renameEntry(node.parent, node.handle, newName)
+      await renameEntry(node.path, newName)
       if (doc?.path === node.path) setDoc(null)
       await reload()
     } catch (e) {
@@ -236,9 +222,9 @@ function App() {
     const msg = isDir
       ? `"${node.name}" 폴더와 그 안의 내용을 모두 삭제할까요? 되돌릴 수 없어요.`
       : `"${node.name}" 파일을 삭제할까요? 되돌릴 수 없어요.`
-    if (!window.confirm(msg)) return
+    if (!(await askConfirm(msg))) return
     try {
-      await deleteEntry(node.parent, node.name, isDir)
+      await deleteEntry(node.path, isDir)
       if (doc?.path === node.path) setDoc(null)
       await reload()
     } catch (e) {
@@ -248,7 +234,7 @@ function App() {
 
   async function handleNewFile(node: TreeNode) {
     if (node.kind !== 'directory') return
-    const raw = window.prompt('새 파일 이름')?.trim()
+    const raw = (await askInput('새 파일 이름'))?.trim()
     if (!raw) return
     const clean = sanitizeName(raw)
     if (!clean) {
@@ -258,7 +244,7 @@ function App() {
     const filename = clean.toLowerCase().endsWith('.md') ? clean : `${clean}.md`
     const title = filename.replace(/\.md$/i, '')
     try {
-      await createFile(node.handle as FileSystemDirectoryHandle, filename, `# ${title}\n\n`)
+      await createFile(node.path, filename, `# ${title}\n\n`)
       await reload()
     } catch (e) {
       setError('파일 생성 실패: ' + String(e))
@@ -267,7 +253,7 @@ function App() {
 
   async function handleNewFolder(node: TreeNode) {
     if (node.kind !== 'directory') return
-    const raw = window.prompt('새 폴더 이름')?.trim()
+    const raw = (await askInput('새 폴더 이름'))?.trim()
     if (!raw) return
     const clean = sanitizeName(raw)
     if (!clean) {
@@ -275,7 +261,7 @@ function App() {
       return
     }
     try {
-      await createDir(node.handle as FileSystemDirectoryHandle, clean)
+      await createDir(node.path, clean)
       await reload()
     } catch (e) {
       setError('폴더 생성 실패: ' + String(e))
@@ -303,21 +289,15 @@ function App() {
   }
 
   async function handleAddColumn() {
-    if (!root) return
-    const raw = window.prompt('새 컬럼(폴더) 이름 — 예: 5-Blocked')?.trim()
+    const raw = (await askInput('새 컬럼(폴더) 이름 — 예: 5-Blocked'))?.trim()
     if (!raw) return
     const clean = sanitizeName(raw)
     if (!clean) {
       setError('이름에 쓸 수 있는 문자가 없어요.')
       return
     }
-    const areaDir = await getAreaDir(root, area)
-    if (!areaDir) {
-      setError('이 영역에 폴더가 없어요.')
-      return
-    }
     try {
-      await createColumn(areaDir, clean)
+      await createColumn(area, clean)
       await reload()
     } catch (e) {
       setError('컬럼 생성 실패: ' + String(e))
@@ -325,7 +305,7 @@ function App() {
   }
 
   async function handleRenameColumn(col: KanbanColumn) {
-    const raw = window.prompt('컬럼 폴더 이름 (예: 5-Blocked)', col.name)?.trim()
+    const raw = (await askInput('컬럼 폴더 이름 (예: 5-Blocked)', col.name))?.trim()
     if (!raw || raw === col.name) return
     const clean = sanitizeName(raw)
     if (!clean) {
@@ -333,7 +313,7 @@ function App() {
       return
     }
     try {
-      await renameEntry(col.parent, col.handle, clean)
+      await renameEntry(col.path, clean)
       await reload()
     } catch (e) {
       setError('컬럼 이름변경 실패: ' + String(e))
@@ -345,60 +325,67 @@ function App() {
       col.cards.length > 0
         ? `"${col.label}" 컬럼과 안의 카드 ${col.cards.length}개를 모두 삭제할까요? 되돌릴 수 없어요.`
         : `"${col.label}" 빈 컬럼을 삭제할까요?`
-    if (!window.confirm(msg)) return
+    if (!(await askConfirm(msg))) return
     try {
-      await deleteEntry(col.parent, col.name, true)
+      await deleteEntry(col.path, true)
       await reload()
     } catch (e) {
       setError('컬럼 삭제 실패: ' + String(e))
     }
   }
 
-  if (phase === 'unsupported') {
+  if (phase === 'init') {
     return (
       <div className="splash">
         <div className="splash-card">
-          <h1>이 브라우저는 지원하지 않아요</h1>
-          <p>로컬 폴더 직접 접근(File System Access API)이 필요합니다. 데스크톱 Chrome 또는 Edge에서 열어주세요.</p>
+          <p>불러오는 중…</p>
         </div>
       </div>
     )
   }
 
-  if (phase === 'init') {
-    return <div className="splash"><div className="splash-card"><p>불러오는 중…</p></div></div>
+  if (phase === 'onboarding') {
+    return (
+      <div className="splash">
+        <div className="splash-card">
+          <h1>omd 시작하기</h1>
+          <p>이 폴더가 비어 있어요. 기본 구조를 만들까요?</p>
+          <pre className="onboard-tree">{`Work/ · Personal/
+├─ Inbox/
+├─ Projects/{1-Todo, 2-In Progress, 3-Ready to Review, 4-Done}/
+└─ Archive/`}</pre>
+          <button className="btn-primary" onClick={() => void handleScaffold()}>
+            기본 구조 만들기
+          </button>
+          <button className="btn-text" onClick={() => setPhase('ready')}>
+            빈 채로 시작
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  if (phase !== 'ready' || !root) {
+  if (phase !== 'ready' || !vaultPath) {
     return (
       <div className="splash">
         <div className="splash-card">
           <h1>omd</h1>
-          {phase === 'need-permission' ? (
-            <>
-              <p>저장된 vault 폴더에 다시 접근하려면 권한을 허용해 주세요.</p>
-              <button className="btn-primary" onClick={() => void grant()}>
-                폴더 접근 허용
-              </button>
-            </>
-          ) : (
-            <>
-              <p>마크다운 vault 폴더를 연결하세요.</p>
-              <button className="btn-primary" onClick={() => void connect()}>
-                vault 폴더 연결
-              </button>
-              <p className="path-hint">{DEFAULT_PATH_HINT}</p>
-            </>
-          )}
+          <p>마크다운 vault 폴더를 연결하세요.</p>
+          <button className="btn-primary" onClick={() => void connect()}>
+            vault 폴더 연결
+          </button>
+          <p className="path-hint">{DEFAULT_PATH_HINT}</p>
         </div>
       </div>
     )
   }
 
+  const vaultLabel = vaultPath.split('/').filter(Boolean).pop() ?? vaultPath
+
   return (
     <div className="app">
       <Sidebar
-        vaultName={root.name}
+        vaultName={vaultLabel}
         area={area}
         view={view}
         tree={tree}
@@ -416,7 +403,6 @@ function App() {
         {view === 'kanban' ? (
           <KanbanBoard
             columns={columns}
-            selectedPath={doc?.path ?? null}
             onMove={handleMove}
             onOpenCard={openCard}
             onNewCard={handleNewCard}
@@ -450,6 +436,7 @@ function App() {
           onClose={() => setCtxMenu(null)}
         />
       )}
+      {modal && <Modal state={modal} onClose={() => setModal(null)} />}
     </div>
   )
 }

@@ -2,14 +2,15 @@
   "name": "omd",
   "private": true,
   "version": "0.1.0",
-  "description": "open markdown — browse local markdown folders as a kanban board and edit with WYSIWYG, in the browser via the File System Access API.",
+  "description": "open markdown — a local-first markdown vault: browse folders as a kanban board and edit with WYSIWYG. Native macOS app built with Tauri.",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
@@ -17,12 +18,15 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@milkdown/crepe": "^7.21.2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@uiw/react-codemirror": "^4.25.10",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2.11.3",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

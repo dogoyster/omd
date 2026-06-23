@@ -270,6 +270,7 @@ button {
 }
 .column-body {
   padding: 0 10px 12px;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -295,12 +296,16 @@ button {
 .card:active {
   cursor: grabbing;
 }
-.card.dragging {
-  opacity: 0.5;
+/* 드래그 중 원본 카드는 자리만 흐리게 남긴다 */
+.card.dragging-source {
+  opacity: 0.4;
 }
-.card.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+/* DragOverlay로 떠다니는 카드 — 컬럼 overflow에 안 잘리고 마우스를 따라온다 */
+.card.overlay {
+  width: 262px;
+  cursor: grabbing;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  transform: rotate(2deg);
 }
 .card-title {
   font-size: 13px;
@@ -520,6 +525,32 @@ button {
   margin-top: 18px;
   line-height: 1.5;
 }
+.onboard-tree {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 20px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.btn-text {
+  display: block;
+  margin: 12px auto 0;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-text:hover {
+  color: var(--text);
+}
 
 /* ---- toast ---- */
 .toast {
@@ -644,4 +675,56 @@ button {
 }
 .ctx-item.danger:hover {
   background: rgba(209, 56, 61, 0.12);
+}
+
+/* ---- 입력/확인 다이얼로그 (window.prompt/confirm 대체) ---- */
+.dialog {
+  width: 90%;
+  max-width: 420px;
+  padding: 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.dialog-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dialog-input {
+  width: 100%;
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.dialog-input:focus {
+  border-color: var(--accent);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dialog-btn {
+  padding: 7px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.dialog-btn.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
 }

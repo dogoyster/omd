@@ -1,6 +1,6 @@
 # omd · open markdown
 
-Local-first markdown vault that runs in your browser. Point it at a folder of `.md` files and **browse the folder structure as a kanban board**, edit with **WYSIWYG or raw markdown**, and never touch a database or server — omd reads and writes files directly through the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API). Put the folder inside a Google Drive / iCloud synced directory and you get sync for free.
+Local-first markdown vault — a **native macOS app** (built with [Tauri](https://tauri.app)) that turns a folder of `.md` files into a **kanban board + editor**. omd reads and writes your files directly on disk; put the folder inside a Google Drive / iCloud synced directory and you get sync for free. No database, no server, no lock-in — just markdown files in folders.
 
 > The core idea: **folder structure _is_ the state.** A card's column is just the folder it lives in.
 
@@ -15,17 +15,23 @@ Local-first markdown vault that runs in your browser. Point it at a folder of `.
 
 ## Requirements
 
-- A **Chromium-based browser** (Chrome or Edge). The File System Access API is required and is **not** available in Safari or Firefox.
-- **Node 18+** to run the dev server.
+- **macOS** (Apple Silicon or Intel). The packaged app is unsigned, so on first launch use **right-click → Open**.
+- For development / building from source: **Node 18+** and the **Rust toolchain** (install via [rustup](https://rustup.rs)).
 
-## Getting started
+## Run from source
 
 ```bash
 npm install
-npm run dev
+npm run tauri dev       # launches the native app in dev mode (HMR)
 ```
 
-Open the printed `localhost` URL in Chrome/Edge, click **Connect vault folder**, and choose a markdown folder — ideally one inside your Google Drive / iCloud synced directory so changes sync across devices.
+## Build a .app
+
+```bash
+npm run tauri build     # → src-tauri/target/release/bundle/macos/omd.app  (+ .dmg)
+```
+
+Drag `omd.app` into `/Applications`. First launch: **right-click → Open** (the app is unsigned).
 
 ## Suggested vault layout
 
@@ -38,16 +44,9 @@ Work/  ·  Personal/                                   # areas
 
 Status is expressed purely by **which folder a file sits in** — there's no `status` field in frontmatter to drift out of sync.
 
-## Build
-
-```bash
-npm run build     # tsc + vite build → dist/
-npm run preview   # serve the production build locally
-```
-
 ## Tech
 
-React + TypeScript + Vite · Milkdown (Crepe) · CodeMirror 6 · dnd-kit · File System Access API.
+Tauri 2 · React + TypeScript + Vite · Milkdown (Crepe) · CodeMirror 6 · dnd-kit.
 
 ## License
 
