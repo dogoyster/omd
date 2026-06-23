@@ -1,0 +1,38 @@
+/* Crepe 테마 오버라이드. import 순서상 nord.css 뒤에 와야 한다(WysiwygEditor.tsx). */
+
+/* 제목/본문 폰트를 앱 시스템 폰트로 통일.
+   기본 nord 테마는 제목=Rubik(없으면 serif), 본문=Inter라 폰트가 달라 보인다.
+   크기·굵기 위계는 Crepe 기본을 그대로 두고 패밀리만 맞춘다. */
+.milkdown {
+  --crepe-font-title: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --crepe-font-default: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --crepe-font-code: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* 다크 모드: nord-dark 색 변수로 오버라이드 (폰트는 위에서 공통 처리) */
+@media (prefers-color-scheme: dark) {
+  .milkdown {
+    --crepe-color-background: #16171d;
+    --crepe-color-on-background: #f8f9ff;
+    --crepe-color-surface: #16171d;
+    --crepe-color-surface-low: #1d1f27;
+    --crepe-color-on-surface: #e1e2e8;
+    --crepe-color-on-surface-variant: #c3c6cf;
+    --crepe-color-outline: #8d9199;
+    --crepe-color-primary: #a1c9fd;
+    --crepe-color-secondary: #3c4858;
+    --crepe-color-on-secondary: #d7e3f8;
+    --crepe-color-inverse: #e1e2e8;
+    --crepe-color-on-inverse: #2e3135;
+    --crepe-color-inline-code: #ffb4ab;
+    --crepe-color-error: #ffb4ab;
+    --crepe-color-hover: #1d2024;
+    --crepe-color-selected: #32353a;
+    --crepe-color-inline-area: #111418;
+
+    --crepe-shadow-1:
+      0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --crepe-shadow-2:
+      0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  }
+}
