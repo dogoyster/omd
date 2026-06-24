@@ -32,12 +32,29 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
   const [saved, setSaved] = useState(true)
   const [mode, setMode] = useState<Mode>('wysiwyg')
   const [dark, setDark] = useState(computeDark)
-  // 외부(동기화 등)에서 파일이 바뀌었는데 로컬 편집이 있을 때 경고
+  // 외부(동기화 등)에서 파일이 바뀌었을 때 안내 배너
   const [extChanged, setExtChanged] = useState(false)
   // 디스크 버전 채택 시 WYSIWYG를 강제 재마운트하기 위한 키
   const [reloadKey, setReloadKey] = useState(0)
   // frontmatter(우선순위·마감·태그) 편집 패널 표시 여부
   const [propsOpen, setPropsOpen] = useState(false)
+
+  // ---- refs (콜백/이펙트보다 먼저 선언) ----
+  const textRef = useRef(text)
+  const savedRef = useRef(saved)
+  const onSavedRef = useRef(onSaved)
+  // 이 세션에서 편집이 한 번이라도 있었는지 — 이탈 시 파일명 동기화 여부 판단.
+  const editedRef = useRef(false)
+  // 우리가 마지막으로 읽거나 쓴 디스크 내용(=알고 있는 디스크 상태). 외부 변경 판정 기준.
+  const baselineRef = useRef('')
+  // 외부 변경 감지 시점의 디스크 내용(배너 동작에 사용).
+  const extDiskRef = useRef('')
+
+  useEffect(() => {
+    textRef.current = text
+    savedRef.current = saved
+    onSavedRef.current = onSaved
+  })
 
   useEffect(() => {
     const update = () => setDark(computeDark())
@@ -59,6 +76,7 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
       if (cancelled) return
       setText(t)
       setSaved(true)
+      baselineRef.current = t
       setLoading(false)
     })
     return () => {
@@ -66,67 +84,64 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
     }
   }, [doc.path])
 
+  // 내용만 디스크에 저장(파일명 동기화·리로드 없음). 자동저장·blur에서 사용.
+  const persist = useCallback(async () => {
+    const t = textRef.current
+    try {
+      await writeFile(doc.path, t)
+      // 저장하는 사이 추가 편집이 없었으면 깨끗 표시 + baseline 갱신
+      if (textRef.current === t) {
+        setSaved(true)
+        savedRef.current = true
+        baselineRef.current = t
+      }
+    } catch {
+      /* 삭제/권한 등 — best-effort */
+    }
+  }, [doc.path])
+
+  // 명시적 저장(⌘S): 저장 + baseline 갱신 + 부모에 알림(파일명↔제목 동기화).
+  const save = useCallback(async () => {
+    const t = text
+    await writeFile(doc.path, t)
+    setSaved(true)
+    savedRef.current = true
+    baselineRef.current = t
+    editedRef.current = false
+    onSaved?.(doc.path, t)
+  }, [doc.path, text, onSaved])
+
   // 디스크의 최신 내용을 채택(로컬 변경 폐기) + WYSIWYG 재마운트.
-  const adoptDisk = useCallback(async () => {
-    const disk = await readFile(doc.path)
+  const adoptDisk = useCallback(() => {
+    const disk = extDiskRef.current
     setText(disk)
     setSaved(true)
     savedRef.current = true
     editedRef.current = false
+    baselineRef.current = disk
     setExtChanged(false)
     setReloadKey((k) => k + 1)
-  }, [doc.path])
+  }, [])
 
-  // 창 포커스 시 디스크와 비교 — 편집 없으면 조용히 갱신, 편집 중이면 경고 배너.
+  // 자동저장(디바운스): 마지막 편집 ~1.5초 후 내용만 저장. (클라우드 업로드·충돌 창 최소화)
   useEffect(() => {
-    const onFocus = () => {
-      void readFile(doc.path)
-        .then((disk) => {
-          if (disk === textRef.current) return
-          if (savedRef.current) {
-            setText(disk)
-            setSaved(true)
-            editedRef.current = false
-            setReloadKey((k) => k + 1)
-          } else {
-            setExtChanged(true)
-          }
-        })
-        .catch(() => {})
+    if (saved) return
+    const id = window.setTimeout(() => void persist(), 1500)
+    return () => window.clearTimeout(id)
+  }, [text, saved, persist])
+
+  // 창이 포커스를 잃을 때 즉시 내용 저장(디바운스 대기 없이) — 전환/닫힘 대비.
+  useEffect(() => {
+    const onBlur = () => {
+      if (!savedRef.current) void persist()
     }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [doc.path])
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [persist])
 
-  const save = useCallback(async () => {
-    await writeFile(doc.path, text)
-    setSaved(true)
-    // 동기적으로도 표시 — 파일명 동기화로 재마운트될 때 언마운트 autosave가
-    // 옛 경로에 다시 쓰는(이름 되살아나는) 사고 방지
-    savedRef.current = true
-    editedRef.current = false // 명시적 저장으로 동기화 완료
-    onSaved?.(doc.path, text)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.path, text, onSaved])
-
-  // 최신 text/saved/onSaved를 ref로 추적 — 언마운트 시점에 최신값을 읽기 위함
-  const textRef = useRef(text)
-  const savedRef = useRef(saved)
-  const onSavedRef = useRef(onSaved)
-  // 이 세션에서 편집이 한 번이라도 있었는지 — 이탈 시 파일명 동기화 여부 판단(자동저장과 무관하게).
-  const editedRef = useRef(false)
-  useEffect(() => {
-    textRef.current = text
-    savedRef.current = saved
-    onSavedRef.current = onSaved
-  })
-
-  // 다른 문서로 전환(언마운트)될 때 저장 안 된 변경이 있으면 자동 저장 → 유실 방지.
-  // App에서 <Editor key={doc.path} />로 문서마다 재마운트하므로 cleanup의 doc은 떠나는 문서다.
+  // 다른 문서로 전환(언마운트)될 때 편집이 있었으면 최종 저장 + 파일명 동기화 → 유실 방지.
   useEffect(() => {
     return () => {
-      // 편집이 있었다면 떠나는 시점에 최종 저장 + 파일명 동기화(자동저장이 내용만 보존했을 수 있음).
-      // 삭제된 파일이었으면 실패할 수 있음 — best-effort라 조용히 무시
       if (editedRef.current)
         void writeFile(doc.path, textRef.current)
           .then(() => onSavedRef.current?.(doc.path, textRef.current))
@@ -135,24 +150,21 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 주기적 자동저장 — 내용만 디스크에 보존(크래시 대비). 파일명 동기화·리로드는 ⌘S/이탈 때만.
+  // 창 포커스 시 디스크를 baseline과 비교 — 우리가 모르는 외부 변경일 때만 배너.
+  // (로컬 편집만 있는 경우엔 disk===baseline이라 오탐하지 않는다)
   useEffect(() => {
-    const id = window.setInterval(() => {
-      if (savedRef.current) return
-      const t = textRef.current
-      void writeFile(doc.path, t)
-        .then(() => {
-          if (textRef.current === t) {
-            // 저장 사이 추가 편집이 없었으면 깨끗 표시
-            setSaved(true)
-            savedRef.current = true
-          }
+    const onFocus = () => {
+      void readFile(doc.path)
+        .then((disk) => {
+          if (disk === baselineRef.current) return
+          extDiskRef.current = disk
+          setExtChanged(true)
         })
         .catch(() => {})
-    }, 2500)
-    return () => window.clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [doc.path])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -296,9 +308,16 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
       {extChanged && (
         <div className="ext-banner">
           <span>이 파일이 다른 곳(동기화 등)에서 바뀌었어요.</span>
-          <button onClick={() => void adoptDisk()}>디스크 버전 불러오기</button>
-          <button className="ghost" onClick={() => setExtChanged(false)}>
-            내 편집 유지
+          <button onClick={adoptDisk}>디스크 버전 불러오기</button>
+          <button
+            className="ghost"
+            onClick={() => {
+              // 외부 버전을 인지(baseline 갱신)하되 내 화면은 유지 → 같은 변경으로 다시 묻지 않음
+              baselineRef.current = extDiskRef.current
+              setExtChanged(false)
+            }}
+          >
+            무시
           </button>
         </div>
       )}

@@ -181,6 +181,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => localStorage.getItem('omd.sidebarOpen') !== 'false',
   )
+  const [conflicts, setConflicts] = useState<string[]>([])
+  const [conflictDismissed, setConflictDismissed] = useState<Record<string, boolean>>({})
 
   // window.prompt/confirm 대체 (Tauri 웹뷰 미지원) — Promise로 모달 결과를 기다린다
   function askInput(title: string, initial = ''): Promise<string | null> {
@@ -327,6 +329,23 @@ function App() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [reload])
+
+  // 동기화 충돌 사본 감지: 같은 폴더에 "X.md"가 있는데 "X (n).md"도 있거나, 이름에 conflict 포함.
+  useEffect(() => {
+    const out: string[] = []
+    const walk = (ns: TreeNode[]) => {
+      const names = new Set(ns.filter((n) => n.kind === 'file').map((n) => n.name.toLowerCase()))
+      for (const n of ns) {
+        if (n.kind === 'file') {
+          const m = /^(.*) \(\d+\)\.md$/i.exec(n.name)
+          if (/conflict/i.test(n.name) || (m && names.has(`${m[1].toLowerCase()}.md`))) out.push(n.path)
+        }
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(tree)
+    setConflicts(out)
+  }, [tree])
 
   useEffect(() => {
     localStorage.setItem('omd.area', area)
@@ -811,6 +830,7 @@ function App() {
   const dirChildren = active.dirPath === area ? tree : (dirNode?.children ?? [])
   const dirTitle = active.dirPath === area ? area : displayName(dirNode?.name ?? active.dirPath)
   const dirOptions = collectDirOptions(tree, area)
+  const activeConflicts = conflicts.filter((p) => !conflictDismissed[p])
 
   const tabItems = tabs.map((t) => {
     let title: string
@@ -843,6 +863,37 @@ function App() {
         onContextMenu={handleTreeContextMenu}
       />
       <main className="main">
+        {activeConflicts.length > 0 && (
+          <div className="conflict-banner">
+            <span>
+              동기화 충돌 사본 {activeConflicts.length}개 감지됨 — Drive 동기화 충돌일 수 있어요.
+            </span>
+            <button
+              onClick={() =>
+                navigate({
+                  view: 'editor',
+                  docPath: activeConflicts[0],
+                  dirPath: activeConflicts[0].split('/').slice(0, -1).join('/'),
+                  dirMode: active.dirMode,
+                })
+              }
+            >
+              열기
+            </button>
+            <button
+              className="ghost"
+              onClick={() =>
+                setConflictDismissed((d) => {
+                  const next = { ...d }
+                  activeConflicts.forEach((p) => (next[p] = true))
+                  return next
+                })
+              }
+            >
+              닫기
+            </button>
+          </div>
+        )}
         <TabBar
           tabs={tabItems}
           sidebarOpen={sidebarOpen}
