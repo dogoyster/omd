@@ -1,100 +1,134 @@
 import { useState } from 'react'
 import type { MouseEvent } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import { ChevronDown, ChevronRight, FileText, Folder } from 'lucide-react'
 import type { TreeNode } from '../types'
-import { isProtectedFolder } from '../fs/vault'
-
-/** 표시용 이름: .md 확장자 제거 + 하이픈을 공백으로 (실제 파일명은 그대로) */
-function displayName(name: string): string {
-  return name.replace(/\.md$/i, '').replace(/-+/g, ' ')
-}
+import { displayName } from '../names'
 
 interface Props {
   nodes: TreeNode[]
   selectedPath: string | null
-  onSelect: (node: TreeNode) => void
-  onRename: (node: TreeNode) => void
-  onDelete: (node: TreeNode) => void
+  selectedDirPath: string | null
+  onSelect: (node: TreeNode, newTab?: boolean) => void
+  onOpenDir: (node: TreeNode, newTab?: boolean) => void
+  onMove: (srcPath: string, toDirPath: string) => void
   onContextMenu: (e: MouseEvent, node: TreeNode) => void
 }
 
-export function FileTreeView({ nodes, selectedPath, onSelect, onRename, onDelete, onContextMenu }: Props) {
-  return (
-    <ul className="tree">
-      {nodes.map((node) => (
-        <TreeItem
-          key={node.path}
-          node={node}
-          selectedPath={selectedPath}
-          onSelect={onSelect}
-          onRename={onRename}
-          onDelete={onDelete}
-          onContextMenu={onContextMenu}
-          depth={0}
-        />
-      ))}
-    </ul>
-  )
-}
+export function FileTreeView({
+  nodes,
+  selectedPath,
+  selectedDirPath,
+  onSelect,
+  onOpenDir,
+  onMove,
+  onContextMenu,
+}: Props) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-interface RowActionsProps {
-  node: TreeNode
-  onRename: (node: TreeNode) => void
-  onDelete: (node: TreeNode) => void
-}
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over) return
+    const src = String(active.id)
+    const to = String(over.id)
+    if (src !== to) onMove(src, to)
+  }
 
-function RowActions({ node, onRename, onDelete }: RowActionsProps) {
   return (
-    <span className="row-actions">
-      <button
-        title="이름변경"
-        onClick={(e) => {
-          e.stopPropagation()
-          onRename(node)
-        }}
-      >
-        ✎
-      </button>
-      <button
-        title="삭제"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete(node)
-        }}
-      >
-        🗑
-      </button>
-    </span>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <ul className="tree">
+        {nodes.map((node) => (
+          <TreeItem
+            key={node.path}
+            node={node}
+            selectedPath={selectedPath}
+            selectedDirPath={selectedDirPath}
+            onSelect={onSelect}
+            onOpenDir={onOpenDir}
+            onContextMenu={onContextMenu}
+            depth={0}
+          />
+        ))}
+      </ul>
+    </DndContext>
   )
 }
 
 interface ItemProps {
   node: TreeNode
   selectedPath: string | null
-  onSelect: (node: TreeNode) => void
-  onRename: (node: TreeNode) => void
-  onDelete: (node: TreeNode) => void
+  selectedDirPath: string | null
+  onSelect: (node: TreeNode, newTab?: boolean) => void
+  onOpenDir: (node: TreeNode, newTab?: boolean) => void
   onContextMenu: (e: MouseEvent, node: TreeNode) => void
   depth: number
 }
 
-function TreeItem({ node, selectedPath, onSelect, onRename, onDelete, onContextMenu, depth }: ItemProps) {
+function TreeItem({
+  node,
+  selectedPath,
+  selectedDirPath,
+  onSelect,
+  onOpenDir,
+  onContextMenu,
+  depth,
+}: ItemProps) {
   const [open, setOpen] = useState(depth < 1)
   const pad = { paddingLeft: depth * 12 + 8 }
+  const drag = useDraggable({ id: node.path })
+  // 폴더만 드롭 타겟
+  const drop = useDroppable({ id: node.path, disabled: node.kind !== 'directory' })
 
   if (node.kind === 'directory') {
     const children = node.children ?? []
-    const locked = isProtectedFolder(node.path, node.kind)
+    const setRefs = (el: HTMLElement | null) => {
+      drag.setNodeRef(el)
+      drop.setNodeRef(el)
+    }
     return (
       <li>
         <div
-          className="tree-row dir"
+          ref={setRefs}
+          className={
+            'tree-row dir' +
+            (selectedDirPath === node.path ? ' active' : '') +
+            (drop.isOver ? ' drop-over' : '') +
+            (drag.isDragging ? ' dragging-source' : '')
+          }
           style={pad}
-          onClick={() => setOpen((o) => !o)}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey) {
+              onOpenDir(node, true) // ⌘클릭 → 새 탭 (펼침은 토글하지 않음)
+              return
+            }
+            setOpen((o) => !o)
+            onOpenDir(node, false)
+          }}
           onContextMenu={(e) => onContextMenu(e, node)}
+          {...drag.listeners}
+          {...drag.attributes}
         >
-          <span className="caret">{children.length > 0 ? (open ? '▾' : '▸') : ''}</span>
+          <span className="caret">
+            {children.length > 0 ? (
+              open ? (
+                <ChevronDown size={13} />
+              ) : (
+                <ChevronRight size={13} />
+              )
+            ) : null}
+          </span>
+          <span className="tree-icon">
+            <Folder size={15} />
+          </span>
           <span className="tree-name">{displayName(node.name)}</span>
-          {!locked && <RowActions node={node} onRename={onRename} onDelete={onDelete} />}
         </div>
         {open && children.length > 0 && (
           <ul className="tree">
@@ -103,9 +137,9 @@ function TreeItem({ node, selectedPath, onSelect, onRename, onDelete, onContextM
                 key={child.path}
                 node={child}
                 selectedPath={selectedPath}
+                selectedDirPath={selectedDirPath}
                 onSelect={onSelect}
-                onRename={onRename}
-                onDelete={onDelete}
+                onOpenDir={onOpenDir}
                 onContextMenu={onContextMenu}
                 depth={depth + 1}
               />
@@ -119,14 +153,23 @@ function TreeItem({ node, selectedPath, onSelect, onRename, onDelete, onContextM
   return (
     <li>
       <div
-        className={'tree-row file' + (selectedPath === node.path ? ' active' : '')}
+        ref={drag.setNodeRef}
+        className={
+          'tree-row file' +
+          (selectedPath === node.path ? ' active' : '') +
+          (drag.isDragging ? ' dragging-source' : '')
+        }
         style={pad}
-        onClick={() => onSelect(node)}
+        onClick={(e) => onSelect(node, e.metaKey || e.ctrlKey)}
         onContextMenu={(e) => onContextMenu(e, node)}
+        {...drag.listeners}
+        {...drag.attributes}
       >
         <span className="caret" />
-        <span className="tree-name">{displayName(node.name)}</span>
-        <RowActions node={node} onRename={onRename} onDelete={onDelete} />
+        <span className="tree-icon">
+          <FileText size={15} />
+        </span>
+        <span className="tree-name">{node.title || displayName(node.name)}</span>
       </div>
     </li>
   )

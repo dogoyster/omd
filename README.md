@@ -9,29 +9,52 @@ Local-first markdown vault — a **native macOS app** (built with [Tauri](https:
 - 📋 **Folder = kanban** — `Projects/{1-Todo, 2-In Progress, …}` render as columns; dragging a card moves the file between folders
 - ✍️ **WYSIWYG + source toggle** — [Milkdown](https://milkdown.dev) editor with a raw-markdown view; YAML frontmatter is preserved
 - 🗂️ **File tree** with a right-click menu — new file/folder, rename, delete (core folders are protected)
+- 🆕 **New Note** button — quick-create a note in the current area's `Inbox`
+- 📂 **Folder view** — click a directory to list its contents with modified / created dates
+- ↩️ **Back navigation** — jump back to the previous note or folder
 - 🔍 **Full-text search** over titles and content (`⌘K`)
 - 💾 **Auto-save on switch** — no lost edits
 - 🌗 Automatic dark mode, remembers your last area/view
 
-## Requirements
+## Prerequisites
 
-- **macOS** (Apple Silicon or Intel). The packaged app is unsigned, so on first launch use **right-click → Open**.
-- For development / building from source: **Node 18+** and the **Rust toolchain** (install via [rustup](https://rustup.rs)).
+| Tool | Why | Install |
+| --- | --- | --- |
+| **macOS** (Apple Silicon / Intel) | target platform | — |
+| **Node 18+** | frontend (Vite) | [nodejs.org](https://nodejs.org) |
+| **Rust toolchain** | Tauri backend | [rustup.rs](https://rustup.rs) |
+| **Xcode Command Line Tools** | native build | `xcode-select --install` |
 
-## Run from source
+## Setup
 
 ```bash
+git clone https://github.com/dogoyster/omd.git
+cd omd
 npm install
-npm run tauri dev       # launches the native app in dev mode (HMR)
 ```
 
-## Build a .app
+## Run (development)
 
 ```bash
-npm run tauri build     # → src-tauri/target/release/bundle/macos/omd.app  (+ .dmg)
+npm run tauri dev
 ```
 
-Drag `omd.app` into `/Applications`. First launch: **right-click → Open** (the app is unsigned).
+Launches the native app window with hot-reload — edit the React/TypeScript source and the UI updates instantly. (The first run compiles Rust dependencies and takes a few minutes; later runs are seconds.)
+
+> `npm run dev` alone starts only the Vite frontend in a browser, where the Tauri filesystem APIs are unavailable — always use `npm run tauri dev` for the full app.
+
+## Build (.app / .dmg)
+
+```bash
+npm run tauri build
+```
+
+Outputs:
+
+- App bundle → `src-tauri/target/release/bundle/macos/omd.app`
+- Disk image → `src-tauri/target/release/bundle/dmg/omd_<version>_aarch64.dmg`
+
+**Install:** drag `omd.app` into `/Applications`. The app is unsigned, so on **first launch** use **right-click → Open → Open** (only needed once).
 
 ## Suggested vault layout
 

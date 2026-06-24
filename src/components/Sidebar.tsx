@@ -1,55 +1,72 @@
 import type { MouseEvent } from 'react'
+import { FolderInput, FolderPlus, Plus, Search, Settings } from 'lucide-react'
 import type { Area, TreeNode } from '../types'
 import { FileTreeView } from './FileTreeView'
-
-type View = 'kanban' | 'editor'
 
 const AREAS: Area[] = ['Work', 'Personal']
 
 interface Props {
   vaultName: string
   area: Area
-  view: View
   tree: TreeNode[]
+  /** 에디터로 열린 파일 경로 (트리 하이라이트용) */
   selectedPath: string | null
+  /** 본문에 열린 디렉토리 경로 (트리 하이라이트용) */
+  selectedDirPath: string | null
   onAreaChange: (area: Area) => void
-  onViewChange: (view: View) => void
-  onSelect: (node: TreeNode) => void
+  onSelect: (node: TreeNode, newTab?: boolean) => void
+  onOpenDir: (node: TreeNode, newTab?: boolean) => void
+  onNewTopDir: () => void
+  onMove: (srcPath: string, toDirPath: string) => void
   onReconnect: () => void
   onSearch: () => void
-  onRename: (node: TreeNode) => void
-  onDelete: (node: TreeNode) => void
+  onNewNote: () => void
+  onSettings: () => void
   onContextMenu: (e: MouseEvent, node: TreeNode) => void
 }
 
 export function Sidebar({
   vaultName,
   area,
-  view,
   tree,
   selectedPath,
+  selectedDirPath,
   onAreaChange,
-  onViewChange,
   onSelect,
+  onOpenDir,
+  onNewTopDir,
+  onMove,
   onReconnect,
   onSearch,
-  onRename,
-  onDelete,
+  onNewNote,
+  onSettings,
   onContextMenu,
 }: Props) {
   return (
     <aside className="sidebar">
       <div className="vault-head">
         <span className="vault-name" title={vaultName}>
-          📁 {vaultName}
+          {vaultName}
         </span>
-        <button className="icon-btn" title="검색 (⌘K)" onClick={onSearch}>
-          🔍
+        <button className="icon-btn" title="검색 (⌘K)" onClick={onSearch} aria-label="검색">
+          <Search size={16} />
         </button>
-        <button className="icon-btn" title="다른 폴더 연결" onClick={onReconnect}>
-          ⤺
+        <button className="icon-btn" title="설정" onClick={onSettings} aria-label="설정">
+          <Settings size={16} />
+        </button>
+        <button
+          className="icon-btn"
+          title="다른 폴더 연결"
+          onClick={onReconnect}
+          aria-label="다른 폴더 연결"
+        >
+          <FolderInput size={16} />
         </button>
       </div>
+
+      <button className="new-note-btn" onClick={onNewNote}>
+        <Plus size={16} /> 새 노트
+      </button>
 
       <div className="seg area-seg">
         {AREAS.map((a) => (
@@ -63,18 +80,10 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="seg view-seg">
-        <button
-          className={'seg-btn' + (view === 'kanban' ? ' on' : '')}
-          onClick={() => onViewChange('kanban')}
-        >
-          칸반
-        </button>
-        <button
-          className={'seg-btn' + (view === 'editor' ? ' on' : '')}
-          onClick={() => onViewChange('editor')}
-        >
-          파일
+      <div className="tree-head">
+        <span className="tree-head-label">폴더</span>
+        <button className="tree-add-btn" title="새 최상위 폴더" onClick={onNewTopDir} aria-label="새 폴더">
+          <FolderPlus size={15} />
         </button>
       </div>
 
@@ -85,9 +94,10 @@ export function Sidebar({
           <FileTreeView
             nodes={tree}
             selectedPath={selectedPath}
+            selectedDirPath={selectedDirPath}
             onSelect={onSelect}
-            onRename={onRename}
-            onDelete={onDelete}
+            onOpenDir={onOpenDir}
+            onMove={onMove}
             onContextMenu={onContextMenu}
           />
         )}

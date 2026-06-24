@@ -1,12 +1,12 @@
-import { mkdir, readDir, readTextFile, remove, rename, writeTextFile } from '@tauri-apps/plugin-fs'
+import { mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { open } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
 import type { Area, KanbanCard, KanbanColumn, Priority, SearchEntry, TreeNode } from '../types'
-import { deriveTitle, parseDoc } from './frontmatter'
+import { deriveTitle, extractTitle, parseDoc } from './frontmatter'
 
 const COLUMN_ORDER = ['1-Todo', '2-In Progress', '3-Ready to Review', '4-Done']
 const PROJECTS_DIR = 'Projects'
 const IGNORED = new Set(['.DS_Store'])
-const PROTECTED_ROOT = new Set(['Inbox', 'Projects', 'Archive', '_templates'])
 
 // 선택된 vault 루트(절대 경로). 단일 vault라 모듈 상태로 보관한다.
 let vaultRoot = ''
@@ -24,13 +24,6 @@ function abs(relPath: string): string {
   return relPath ? `${vaultRoot}/${relPath}` : vaultRoot
 }
 
-/** 영역 직하위 핵심 폴더(Inbox/Projects/Archive/_templates)인지 — 삭제·이름변경 보호용. */
-export function isProtectedFolder(path: string, kind: 'file' | 'directory'): boolean {
-  if (kind !== 'directory') return false
-  const parts = path.split('/')
-  return parts.length === 2 && PROTECTED_ROOT.has(parts[1])
-}
-
 /** 네이티브 폴더 선택 다이얼로그. 취소 시 null. */
 export async function pickVault(): Promise<string | null> {
   const selected = await open({ directory: true, title: 'vault 폴더 선택' })
@@ -45,7 +38,32 @@ export async function writeFile(relPath: string, text: string): Promise<void> {
   await writeTextFile(abs(relPath), text)
 }
 
-/** relPath 하위를 재귀로 훑어 트리 구성. */
+export interface EntryStat {
+  /** 수정 시각 (epoch ms) */
+  modified: number | null
+  /** 생성 시각 (epoch ms) */
+  created: number | null
+}
+
+/** 경로 존재 여부 (이름 충돌 검사용). */
+export async function pathExists(relPath: string): Promise<boolean> {
+  try {
+    await stat(abs(relPath))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function statEntry(relPath: string): Promise<EntryStat> {
+  const info = await stat(abs(relPath))
+  return {
+    modified: info.mtime ? info.mtime.getTime() : null,
+    created: info.birthtime ? info.birthtime.getTime() : null,
+  }
+}
+
+/** relPath 하위를 재귀로 훑어 트리 구성. 파일은 본문 H1을 읽어 title로 담는다. */
 export async function buildTree(relPath: string): Promise<TreeNode[]> {
   let entries
   try {
@@ -53,16 +71,23 @@ export async function buildTree(relPath: string): Promise<TreeNode[]> {
   } catch {
     return []
   }
-  const nodes: TreeNode[] = []
-  for (const e of entries) {
-    if (e.name.startsWith('.') || IGNORED.has(e.name)) continue
-    const path = relPath ? `${relPath}/${e.name}` : e.name
-    if (e.isDirectory) {
-      nodes.push({ name: e.name, kind: 'directory', path, children: await buildTree(path) })
-    } else if (e.name.toLowerCase().endsWith('.md')) {
-      nodes.push({ name: e.name, kind: 'file', path })
-    }
-  }
+  const visible = entries.filter(
+    (e) =>
+      !e.name.startsWith('.') &&
+      !IGNORED.has(e.name) &&
+      (e.isDirectory || e.name.toLowerCase().endsWith('.md')),
+  )
+  // 파일 read(H1 추출)·하위 디렉토리 재귀를 병렬로 — 순차 read의 N+1 지연 회피
+  const nodes = await Promise.all(
+    visible.map(async (e): Promise<TreeNode> => {
+      const path = relPath ? `${relPath}/${e.name}` : e.name
+      if (e.isDirectory) {
+        return { name: e.name, kind: 'directory', path, children: await buildTree(path) }
+      }
+      const { body } = parseDoc(await readTextFile(abs(path)))
+      return { name: e.name, kind: 'file', path, title: extractTitle(body) }
+    }),
+  )
   nodes.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
     return a.name.localeCompare(b.name)
@@ -80,22 +105,21 @@ export async function areaHasContent(area: Area): Promise<boolean> {
   }
 }
 
-export async function loadBoard(area: Area): Promise<KanbanColumn[]> {
-  const projectsRel = `${area}/${PROJECTS_DIR}`
+/** 디렉토리의 하위 폴더 = 컬럼, 각 폴더 안의 .md = 카드. 어떤 폴더든 칸반으로 볼 수 있다. */
+export async function loadBoardFromDir(dirRel: string): Promise<KanbanColumn[]> {
   let entries
   try {
-    entries = await readDir(abs(projectsRel))
+    entries = await readDir(abs(dirRel))
   } catch {
     return []
   }
-  const dirNames = entries.filter((e) => e.isDirectory && !e.name.startsWith('.')).map((e) => e.name)
-  const ordered = [
-    ...COLUMN_ORDER.filter((n) => dirNames.includes(n)),
-    ...dirNames.filter((n) => !COLUMN_ORDER.includes(n)).sort(),
-  ]
+  const dirNames = entries
+    .filter((e) => e.isDirectory && !e.name.startsWith('.'))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b))
   const columns: KanbanColumn[] = []
-  for (const name of ordered) {
-    const colPath = `${projectsRel}/${name}`
+  for (const name of dirNames) {
+    const colPath = `${dirRel}/${name}`
     columns.push({ name, label: prettyColumn(name), path: colPath, cards: await loadCards(colPath) })
   }
   return columns
@@ -130,10 +154,10 @@ function priorityRank(p?: Priority): number {
   return p === 'high' ? 0 : p === 'mid' ? 1 : p === 'low' ? 2 : 3
 }
 
-/** 카드를 다른 컬럼 폴더로 이동. */
-export async function moveCard(cardPath: string, toColPath: string): Promise<void> {
-  const name = cardPath.split('/').pop() ?? cardPath
-  await rename(abs(cardPath), abs(`${toColPath}/${name}`))
+/** 파일/폴더를 다른 디렉토리로 이동 (칸반 카드 이동 · 트리 드래그 공용). */
+export async function moveEntry(srcPath: string, toDirPath: string): Promise<void> {
+  const name = srcPath.split('/').pop() ?? srcPath
+  await rename(abs(srcPath), abs(`${toDirPath}/${name}`))
 }
 
 /** 파일/폴더 이름변경(같은 부모 안에서). */
@@ -144,9 +168,10 @@ export async function renameEntry(path: string, newName: string): Promise<void> 
   await rename(abs(path), abs(next))
 }
 
-/** 파일/폴더 삭제. 폴더는 recursive=true. */
-export async function deleteEntry(path: string, recursive = false): Promise<void> {
-  await remove(abs(path), { recursive })
+/** 파일/폴더를 OS 휴지통으로 이동(영구삭제 아님). 폴더는 통째로 이동된다.
+ * Rust `move_to_trash` 커맨드를 거쳐 std::fs::remove의 클라우드 볼륨 실패 문제를 피한다. */
+export async function deleteEntry(path: string): Promise<void> {
+  await invoke('move_to_trash', { path: abs(path) })
 }
 
 export async function createFile(dirPath: string, name: string, content = ''): Promise<void> {
@@ -157,9 +182,14 @@ export async function createDir(dirPath: string, name: string): Promise<void> {
   await mkdir(abs(`${dirPath}/${name}`))
 }
 
-/** Projects/ 안에 새 컬럼(폴더). */
-export async function createColumn(area: Area, name: string): Promise<void> {
-  await mkdir(abs(`${area}/${PROJECTS_DIR}/${name}`), { recursive: true })
+/** 현재 보고 있는 디렉토리 안에 새 컬럼(하위 폴더). */
+export async function createColumn(dirRel: string, name: string): Promise<void> {
+  await mkdir(abs(`${dirRel}/${name}`), { recursive: true })
+}
+
+/** 경로의 디렉토리를 보장(없으면 생성). */
+export async function ensureDir(relPath: string): Promise<void> {
+  await mkdir(abs(relPath), { recursive: true })
 }
 
 /** 빈 vault에 기본 구조(영역 · Inbox · Projects 스테이지 · Archive · _templates)를 생성. */

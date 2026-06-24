@@ -59,9 +59,34 @@ function unquote(s: string): string {
   return s.replace(/^["']|["']$/g, '')
 }
 
+/** 본문 첫 H1 헤딩 → 없으면 undefined. */
+export function extractTitle(body: string): string | undefined {
+  const m = /^#\s+(.+)$/m.exec(body)
+  return m ? m[1].trim() : undefined
+}
+
 /** 카드 제목: 본문 첫 H1 헤딩 → 없으면 파일명(.md 제거). */
 export function deriveTitle(body: string, filename: string): string {
-  const h = /^#\s+(.+)$/m.exec(body)
-  if (h) return h[1].trim()
-  return filename.replace(/\.md$/i, '')
+  return extractTitle(body) ?? filename.replace(/\.md$/i, '')
+}
+
+/** Frontmatter 객체를 `---\n...\n---\n` 블록 문자열로 직렬화 (parseDoc의 역).
+ * 키 순서를 보존하며, 배열은 `[a, b]`, 빈 값은 `key: `로 출력한다. */
+export function formatFrontmatter(data: Frontmatter): string {
+  const lines = Object.entries(data).map(([k, v]) => {
+    if (Array.isArray(v)) return `${k}: [${v.join(', ')}]`
+    if (v === undefined || v === null || v === '') return `${k}: `
+    return `${k}: ${v}`
+  })
+  return `---\n${lines.join('\n')}\n---\n`
+}
+
+/** 본문의 첫 H1을 새 제목으로 교체. H1이 없으면 맨 위에 삽입. */
+export function setTitle(body: string, title: string): string {
+  if (/^#\s+.+$/m.test(body)) {
+    // 치환문에서 title의 `$`가 특수문자로 해석되지 않도록 함수형 replace 사용
+    return body.replace(/^#\s+.+$/m, () => `# ${title}`)
+  }
+  const rest = body.replace(/^\s+/, '')
+  return `# ${title}\n\n${rest}`
 }

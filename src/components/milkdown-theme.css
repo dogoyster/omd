@@ -9,9 +9,10 @@
   --crepe-font-code: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
-/* 다크 모드: nord-dark 색 변수로 오버라이드 (폰트는 위에서 공통 처리) */
+/* 다크 색 변수 (폰트는 위에서 공통 처리).
+   시스템 다크(수동 light 제외) + 수동 dark 양쪽에 적용. */
 @media (prefers-color-scheme: dark) {
-  .milkdown {
+  :root:not([data-theme='light']) .milkdown {
     --crepe-color-background: #16171d;
     --crepe-color-on-background: #f8f9ff;
     --crepe-color-surface: #16171d;
@@ -29,10 +30,28 @@
     --crepe-color-hover: #1d2024;
     --crepe-color-selected: #32353a;
     --crepe-color-inline-area: #111418;
-
-    --crepe-shadow-1:
-      0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
-    --crepe-shadow-2:
-      0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+    --crepe-shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --crepe-shadow-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
   }
+}
+:root[data-theme='dark'] .milkdown {
+  --crepe-color-background: #16171d;
+  --crepe-color-on-background: #f8f9ff;
+  --crepe-color-surface: #16171d;
+  --crepe-color-surface-low: #1d1f27;
+  --crepe-color-on-surface: #e1e2e8;
+  --crepe-color-on-surface-variant: #c3c6cf;
+  --crepe-color-outline: #8d9199;
+  --crepe-color-primary: #a1c9fd;
+  --crepe-color-secondary: #3c4858;
+  --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-inverse: #e1e2e8;
+  --crepe-color-on-inverse: #2e3135;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #1d2024;
+  --crepe-color-selected: #32353a;
+  --crepe-color-inline-area: #111418;
+  --crepe-shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --crepe-shadow-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
 }

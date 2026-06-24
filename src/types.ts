@@ -17,6 +17,8 @@ export interface TreeNode {
   kind: 'file' | 'directory'
   /** vault 루트 기준 상대 경로, 예: "Work/Projects/1-Todo/foo.md" */
   path: string
+  /** 파일의 본문 H1 제목 (없으면 undefined → 파일명으로 표시) */
+  title?: string
   children?: TreeNode[]
 }
 

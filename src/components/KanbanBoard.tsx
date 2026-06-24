@@ -9,6 +9,7 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { KanbanCard, KanbanColumn } from '../types'
 
 interface Props {
@@ -60,9 +61,9 @@ export function KanbanBoard({
   if (columns.length === 0) {
     return (
       <div className="placeholder">
-        이 영역에 Projects/ 폴더가 없어요.
+        이 폴더엔 하위 폴더(컬럼)가 없어요.
         <button className="add-column inline" onClick={onAddColumn}>
-          + 컬럼 만들기
+          <Plus size={14} /> 컬럼 만들기
         </button>
       </div>
     )
@@ -87,7 +88,7 @@ export function KanbanBoard({
           />
         ))}
         <button className="add-column" onClick={onAddColumn} title="새 컬럼">
-          ＋ 컬럼
+          <Plus size={14} /> 컬럼
         </button>
       </div>
       {/* 드래그 중 카드는 최상위로 띄워 컬럼 overflow에 잘리지 않고 마우스를 따라온다 */}
@@ -118,15 +119,15 @@ function Column({ col, onOpenCard, onNewCard, onRenameColumn, onDeleteColumn }: 
         <span className="col-label">{col.label}</span>
         <span className="count">{col.cards.length}</span>
         <div className="row-actions col-actions">
-          <button title="컬럼 이름변경" onClick={() => onRenameColumn(col)}>
-            ✎
+          <button title="컬럼 이름변경" onClick={() => onRenameColumn(col)} aria-label="컬럼 이름변경">
+            <Pencil size={13} />
           </button>
-          <button title="컬럼 삭제" onClick={() => onDeleteColumn(col)}>
-            🗑
+          <button title="컬럼 삭제" onClick={() => onDeleteColumn(col)} aria-label="컬럼 삭제">
+            <Trash2 size={13} />
           </button>
         </div>
-        <button className="add" title="새 카드" onClick={() => onNewCard(col)}>
-          ＋
+        <button className="add" title="새 카드" onClick={() => onNewCard(col)} aria-label="새 카드">
+          <Plus size={16} />
         </button>
       </div>
       <div className="column-body">
