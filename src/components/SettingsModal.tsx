@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 export type Theme = 'system' | 'light' | 'dark'
 
@@ -59,18 +60,24 @@ export function SettingsModal({
           <label>
             새 노트 기본 폴더<span className="settings-hint"> · {area} 영역 기준</span>
           </label>
-          <select
-            className="settings-select"
-            value={defaultDir}
-            onChange={(e) => onDefaultDirChange(e.target.value)}
-          >
-            <option value="">Inbox (기본)</option>
-            {dirOptions.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+          <div className="select-wrap">
+            <select
+              className="settings-select"
+              value={defaultDir}
+              onChange={(e) => onDefaultDirChange(e.target.value)}
+            >
+              {/* 빈 값(="")이 곧 Inbox라서 목록의 "Inbox"는 중복 — 제외한다 */}
+              <option value="">Inbox (기본)</option>
+              {dirOptions
+                .filter((d) => d !== 'Inbox')
+                .map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+            </select>
+            <ChevronDown className="select-caret" size={15} aria-hidden="true" />
+          </div>
         </section>
 
         <div className="dialog-actions">

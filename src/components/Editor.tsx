@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Save, SlidersHorizontal } from 'lucide-react'
 import type { OpenDoc } from '../types'
 import { readFile, writeFile } from '../fs/vault'
 import { extractTitle, formatFrontmatter, parseDoc, splitFrontmatter } from '../fs/frontmatter'
-import { displayName } from '../names'
+import { displayName, stripMd } from '../names'
 import { WysiwygEditor } from './WysiwygEditor'
 
 type Mode = 'wysiwyg' | 'source'
@@ -201,8 +201,9 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
   const body = splitFrontmatter(text).body
   const fm = parseDoc(text).data
   const filename = doc.path.split('/').pop() ?? doc.path
-  // 제목: 본문 H1(편집 중에도 실시간 반영) → 없으면 파일명(.md 제거)
-  const title = extractTitle(body) ?? displayName(filename)
+  // 제목: 본문 H1(편집 중에도 실시간 반영, 끝의 .md만 정리) → 없으면 파일명
+  const h1 = extractTitle(body)
+  const title = h1 ? stripMd(h1) : displayName(filename)
   // 경로 prefix는 폴더만, 표시용 이름으로 (확장자·하이픈 없이)
   const crumb = doc.path.split('/').slice(0, -1).map(displayName).join(' / ')
 

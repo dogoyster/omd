@@ -14,7 +14,7 @@ import { FolderView } from './components/FolderView'
 import { SettingsModal } from './components/SettingsModal'
 import type { Theme } from './components/SettingsModal'
 import { TabBar } from './components/TabBar'
-import { displayName } from './names'
+import { displayName, nodeLabel, stripMd } from './names'
 import {
   areaHasContent,
   buildSearchIndex,
@@ -68,9 +68,10 @@ function sanitizeName(s: string): string {
   return s.replace(/[/\\:*?"<>|]/g, '').trim()
 }
 
-/** 제목 → 파일명 슬러그 (공백을 하이픈으로). displayName의 역변환. */
+/** 제목 → 파일명 슬러그 (끝의 .md 제거 후 공백을 하이픈으로). displayName의 역변환.
+ * .md를 먼저 떼지 않으면 "files.md" 같은 H1이 "files.md.md" 파일을 만든다. */
 function slugify(title: string): string {
-  return sanitizeName(title).replace(/\s+/g, '-')
+  return sanitizeName(stripMd(title)).replace(/\s+/g, '-')
 }
 
 /** tree에서 path로 노드 찾기 (reload 후에도 최신 노드 참조). */
@@ -836,7 +837,7 @@ function App() {
     let title: string
     if (t.view === 'editor' && t.docPath) {
       const n = findNode(tree, t.docPath)
-      title = n?.title || displayName(t.docPath.split('/').pop() ?? t.docPath)
+      title = n ? nodeLabel(n) : displayName(t.docPath.split('/').pop() ?? t.docPath)
     } else {
       title = t.dirPath === area ? area : displayName(t.dirPath.split('/').pop() ?? t.dirPath)
     }
@@ -860,6 +861,7 @@ function App() {
         onSearch={() => void openSearch()}
         onNewNote={() => void handleNewNote()}
         onSettings={() => setSettingsOpen(true)}
+        onToggleSidebar={() => setSidebarOpen((o) => !o)}
         onContextMenu={handleTreeContextMenu}
       />
       <main className="main">
@@ -971,6 +973,7 @@ function App() {
                 dirPath={active.dirPath}
                 onOpenFile={openNode}
                 onOpenDir={handleOpenDir}
+                onMove={handleTreeMove}
               />
             )}
           </div>

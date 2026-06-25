@@ -11,7 +11,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core'
 import { ChevronDown, ChevronRight, FileText, Folder } from 'lucide-react'
 import type { TreeNode } from '../types'
-import { displayName } from '../names'
+import { nodeLabel } from '../names'
 
 interface Props {
   nodes: TreeNode[]
@@ -128,7 +128,7 @@ function TreeItem({
           <span className="tree-icon">
             <Folder size={15} />
           </span>
-          <span className="tree-name">{displayName(node.name)}</span>
+          <span className="tree-name">{nodeLabel(node)}</span>
         </div>
         {open && children.length > 0 && (
           <ul className="tree">
@@ -169,7 +169,7 @@ function TreeItem({
         <span className="tree-icon">
           <FileText size={15} />
         </span>
-        <span className="tree-name">{node.title || displayName(node.name)}</span>
+        <span className="tree-name">{nodeLabel(node)}</span>
       </div>
     </li>
   )

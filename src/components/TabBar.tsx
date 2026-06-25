@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { FileText, Folder, PanelLeft, PanelLeftClose, Plus, X } from 'lucide-react'
+import { FileText, Folder, PanelLeft, Plus, X } from 'lucide-react'
 
 export interface TabItem {
   id: number
@@ -24,14 +24,17 @@ export function TabBar({ tabs, sidebarOpen, onToggleSidebar, onActivate, onClose
   }
   return (
     <div className="tabbar">
-      <button
-        className="tab-toggle"
-        onClick={onToggleSidebar}
-        title={sidebarOpen ? '사이드바 닫기 (⌘B)' : '사이드바 열기 (⌘B)'}
-        aria-label="사이드바 토글"
-      >
-        {sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeft size={17} />}
-      </button>
+      {/* 사이드바가 접혔을 때만 여는 버튼을 노출 — 닫기 버튼은 사이드바 안에 있다 */}
+      {!sidebarOpen && (
+        <button
+          className="tab-toggle"
+          onClick={onToggleSidebar}
+          title="사이드바 열기 (⌘B)"
+          aria-label="사이드바 열기"
+        >
+          <PanelLeft size={17} />
+        </button>
+      )}
       <div className="tabs">
         {tabs.map((t) => (
           <div

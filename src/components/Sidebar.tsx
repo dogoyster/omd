@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react'
-import { FolderInput, FolderPlus, Plus, Search, Settings } from 'lucide-react'
+import { FolderInput, FolderPlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import type { Area, TreeNode } from '../types'
+import { stripMd } from '../names'
 import { FileTreeView } from './FileTreeView'
 
 const AREAS: Area[] = ['Work', 'Personal']
@@ -22,6 +23,7 @@ interface Props {
   onSearch: () => void
   onNewNote: () => void
   onSettings: () => void
+  onToggleSidebar: () => void
   onContextMenu: (e: MouseEvent, node: TreeNode) => void
 }
 
@@ -40,13 +42,14 @@ export function Sidebar({
   onSearch,
   onNewNote,
   onSettings,
+  onToggleSidebar,
   onContextMenu,
 }: Props) {
   return (
     <aside className="sidebar">
       <div className="vault-head">
         <span className="vault-name" title={vaultName}>
-          {vaultName}
+          {stripMd(vaultName)}
         </span>
         <button className="icon-btn" title="검색 (⌘K)" onClick={onSearch} aria-label="검색">
           <Search size={16} />
@@ -61,6 +64,14 @@ export function Sidebar({
           aria-label="다른 폴더 연결"
         >
           <FolderInput size={16} />
+        </button>
+        <button
+          className="icon-btn"
+          title="사이드바 닫기 (⌘B)"
+          onClick={onToggleSidebar}
+          aria-label="사이드바 닫기"
+        >
+          <PanelLeftClose size={16} />
         </button>
       </div>
 
