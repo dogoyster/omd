@@ -24,9 +24,13 @@ interface Props {
   onForward?: () => void
   /** 저장 직후 호출 — 저장된 경로와 내용을 넘겨, 부모가 파일명↔제목 동기화에 쓴다. */
   onSaved?: (path: string, text: string) => void
+  /** 위키링크 자동완성 후보(노트 제목·경로). */
+  notes: { title: string; path: string }[]
+  /** `[[...]]` 클릭 시 대상 제목으로 이동. */
+  onWikilink: (target: string) => void
 }
 
-export function Editor({ doc, onBack, onForward, onSaved }: Props) {
+export function Editor({ doc, onBack, onForward, onSaved, notes, onWikilink }: Props) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(true)
@@ -326,7 +330,13 @@ export function Editor({ doc, onBack, onForward, onSaved }: Props) {
         {loading ? (
           <div className="placeholder">불러오는 중…</div>
         ) : mode === 'wysiwyg' ? (
-          <WysiwygEditor key={doc.path + ':' + reloadKey} initial={body} onChange={onWysiwygChange} />
+          <WysiwygEditor
+            key={doc.path + ':' + reloadKey}
+            initial={body}
+            onChange={onWysiwygChange}
+            notes={notes}
+            onWikilink={onWikilink}
+          />
         ) : (
           <CodeMirror
             value={text}

@@ -101,6 +101,15 @@ function collectDirOptions(nodes: TreeNode[], area: Area): string[] {
   return out
 }
 
+/** 트리의 모든 노트(파일)를 {제목, 경로}로 평탄화 — 위키링크 자동완성·해석용. */
+function collectNotes(nodes: TreeNode[], out: { title: string; path: string }[] = []) {
+  for (const n of nodes) {
+    if (n.kind === 'file') out.push({ title: nodeLabel(n), path: n.path })
+    if (n.children) collectNotes(n.children, out)
+  }
+  return out
+}
+
 // 디렉토리별 보기 방식(리스트/칸반)을 경로 단위로 기억한다.
 function loadDirModes(): Record<string, DirMode> {
   try {
@@ -472,6 +481,27 @@ function App() {
     setSearchOpen(false)
   }
 
+  // 위키링크 [[대상]] 클릭 → 제목 → 파일명(.md 제거) → 슬러그 순으로 해석해 그 노트로 이동.
+  function handleWikilink(target: string) {
+    const t = target.toLowerCase()
+    const tslug = slugify(target).toLowerCase()
+    const notes = collectNotes(tree)
+    const hit =
+      notes.find((n) => n.title.toLowerCase() === t) ??
+      notes.find((n) => stripMd(n.path.split('/').pop() ?? '').toLowerCase() === t) ??
+      notes.find((n) => slugify(n.title).toLowerCase() === tslug)
+    if (hit) {
+      navigate({
+        view: 'editor',
+        docPath: hit.path,
+        dirPath: hit.path.split('/').slice(0, -1).join('/'),
+        dirMode: active.dirMode,
+      })
+    } else {
+      setError(`'${target}' 노트를 찾을 수 없어요`)
+    }
+  }
+
   // 저장 직후: 본문 H1 → 파일명 동기화 후 트리·보드 갱신.
   async function handleDocSaved(savedPath: string, savedText: string) {
     try {
@@ -831,6 +861,7 @@ function App() {
   const dirChildren = active.dirPath === area ? tree : (dirNode?.children ?? [])
   const dirTitle = active.dirPath === area ? area : displayName(dirNode?.name ?? active.dirPath)
   const dirOptions = collectDirOptions(tree, area)
+  const noteIndex = collectNotes(tree)
   const activeConflicts = conflicts.filter((p) => !conflictDismissed[p])
 
   const tabItems = tabs.map((t) => {
@@ -913,6 +944,8 @@ function App() {
             onBack={active.back.length > 0 ? goBack : undefined}
             onForward={active.forward.length > 0 ? goForward : undefined}
             onSaved={(p, t) => void handleDocSaved(p, t)}
+            notes={noteIndex}
+            onWikilink={handleWikilink}
           />
         ) : (
           <div className="dir-pane">
