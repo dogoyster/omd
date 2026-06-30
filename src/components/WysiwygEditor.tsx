@@ -1,9 +1,28 @@
 import { useEffect, useRef } from 'react'
-import { Crepe } from '@milkdown/crepe'
+import { Crepe, CrepeFeature } from '@milkdown/crepe'
+import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/nord.css'
 import './milkdown-theme.css'
 import { wikilinkPlugin } from './wikilink'
+import { titlePlugin } from './titleField'
+
+// 하이라이팅 없는 '플레인 텍스트' 언어 — 코드블록 언어 피커에 "Text" 옵션을 추가한다
+// (기본 목록엔 html/java/c++ 등만 있고 text가 없어서 직접 넣는다).
+const PLAIN_TEXT_LANG = LanguageDescription.of({
+  name: 'Text',
+  alias: ['text', 'plain', 'plaintext'],
+  load: async () =>
+    new LanguageSupport(
+      StreamLanguage.define({
+        token(stream) {
+          stream.next()
+          return null
+        },
+      }),
+    ),
+})
 
 interface Props {
   /** 마운트 시점의 본문(frontmatter 제외). 문서 전환은 부모의 key로 재마운트해 반영. */
@@ -33,13 +52,20 @@ export function WysiwygEditor({ initial, onChange, notes, onWikilink }: Props) {
     let destroyed = false
     let instance: Crepe | null = null
 
-    const crepe = new Crepe({ root: host, defaultValue: initial })
+    const crepe = new Crepe({
+      root: host,
+      defaultValue: initial,
+      featureConfigs: {
+        [CrepeFeature.CodeMirror]: { languages: [PLAIN_TEXT_LANG, ...languages] },
+      },
+    })
     crepe.editor.use(
       wikilinkPlugin({
         getNotes: () => notesRef.current,
         onOpen: (target) => onWikilinkRef.current(target),
       }),
     )
+    crepe.editor.use(titlePlugin())
     crepe.on((api) => {
       api.markdownUpdated((_ctx, markdown) => {
         // create() 중 발생하는 초기 콜백은 무시 — 실제 사용자 편집만 dirty 처리

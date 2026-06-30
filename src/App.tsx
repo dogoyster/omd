@@ -586,20 +586,18 @@ function App() {
   }
 
   async function handleNewNote() {
-    const title = (await askInput('새 노트 제목'))?.trim()
-    if (!title) return
-    const slug = slugify(title)
-    if (!slug) {
-      setError('제목에 쓸 수 있는 문자가 없어요.')
-      return
-    }
+    // 제목 모달 없이 — 빈 제목(H1) 노트를 만들어 열고, 에디터가 제목에 포커스 + '무제' placeholder.
+    // 파일명은 임시('무제…'); 제목을 입력해 저장하면 H1→파일명 동기화로 자동 변경된다.
     const dir = `${area}/${defaultDir || 'Inbox'}` // 설정의 기본 폴더(없으면 Inbox)
     const today = new Date().toISOString().slice(0, 10)
-    const content = `---\nproject: \npriority: mid\ncreated: ${today}\ndue: \ntags: []\nsource: \n---\n\n# ${title}\n\n`
+    const content = `---\nproject: \npriority: mid\ncreated: ${today}\ndue: \ntags: []\nsource: \n---\n\n# \n`
     try {
       await ensureDir(dir)
-      await createFile(dir, `${slug}.md`, content)
-      navigate({ view: 'editor', docPath: `${dir}/${slug}.md`, dirPath: dir, dirMode: active.dirMode })
+      let name = '무제.md'
+      let n = 2
+      while (await pathExists(`${dir}/${name}`)) name = `무제 ${n++}.md`
+      await createFile(dir, name, content)
+      navigate({ view: 'editor', docPath: `${dir}/${name}`, dirPath: dir, dirMode: active.dirMode })
       await reload()
     } catch (e) {
       setError('노트 생성 실패: ' + String(e))
