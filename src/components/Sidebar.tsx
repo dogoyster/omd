@@ -67,7 +67,7 @@ export function Sidebar({
         </button>
         <button
           className="icon-btn"
-          title="사이드바 닫기 (⌘B)"
+          title="사이드바 닫기 (⌘\\)"
           onClick={onToggleSidebar}
           aria-label="사이드바 닫기"
         >

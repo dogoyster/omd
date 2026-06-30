@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MouseEvent } from 'react'
+import type { MouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { ArrowLeft, ArrowRight, LayoutGrid, List } from 'lucide-react'
 import type { Area, KanbanCard, KanbanColumn, SearchEntry, TreeNode } from './types'
 import { Sidebar } from './components/Sidebar'
@@ -191,6 +191,10 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => localStorage.getItem('omd.sidebarOpen') !== 'false',
   )
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const n = Number(localStorage.getItem('omd.sidebarWidth'))
+    return n >= 180 && n <= 520 ? n : 260
+  })
   const [conflicts, setConflicts] = useState<string[]>([])
   const [conflictDismissed, setConflictDismissed] = useState<Record<string, boolean>>({})
 
@@ -375,6 +379,26 @@ function App() {
     localStorage.setItem('omd.sidebarOpen', String(sidebarOpen))
   }, [sidebarOpen])
 
+  useEffect(() => {
+    localStorage.setItem('omd.sidebarWidth', String(sidebarWidth))
+  }, [sidebarWidth])
+
+  // 사이드바 우측 경계 드래그로 폭 조절 (180~520px).
+  function startResize(e: ReactPointerEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const onMove = (ev: PointerEvent) => setSidebarWidth(Math.min(520, Math.max(180, ev.clientX)))
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.removeProperty('cursor')
+      document.body.style.removeProperty('user-select')
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   // 단축키 — 최신 핸들러를 ref로 참조해 한 번만 구독한다.
   const keysRef = useRef<{ [k: string]: () => void }>({})
   keysRef.current = {
@@ -395,7 +419,7 @@ function App() {
       } else if (k === 'n') {
         e.preventDefault()
         s.newNote()
-      } else if (k === 'b') {
+      } else if (e.key === '\\') {
         e.preventDefault()
         s.toggleSidebar()
       } else if (e.key === '[') {
@@ -874,7 +898,10 @@ function App() {
   })
 
   return (
-    <div className={'app' + (sidebarOpen ? '' : ' sidebar-collapsed')}>
+    <div
+      className={'app' + (sidebarOpen ? '' : ' sidebar-collapsed')}
+      style={{ gridTemplateColumns: sidebarOpen ? `${sidebarWidth}px 1fr` : '1fr' }}
+    >
       <Sidebar
         vaultName={vaultLabel}
         area={area}
@@ -893,6 +920,14 @@ function App() {
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
         onContextMenu={handleTreeContextMenu}
       />
+      {sidebarOpen && (
+        <div
+          className="sidebar-resizer"
+          style={{ left: sidebarWidth }}
+          onPointerDown={startResize}
+          title="드래그하여 사이드바 폭 조절"
+        />
+      )}
       <main className="main">
         {activeConflicts.length > 0 && (
           <div className="conflict-banner">

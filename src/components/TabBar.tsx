@@ -29,7 +29,7 @@ export function TabBar({ tabs, sidebarOpen, onToggleSidebar, onActivate, onClose
         <button
           className="tab-toggle"
           onClick={onToggleSidebar}
-          title="사이드바 열기 (⌘B)"
+          title="사이드바 열기 (⌘\\)"
           aria-label="사이드바 열기"
         >
           <PanelLeft size={17} />
