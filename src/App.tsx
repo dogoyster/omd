@@ -344,6 +344,16 @@ function App() {
     return () => window.removeEventListener('focus', onFocus)
   }, [reload])
 
+  // Crepe 표의 행/열 드래그 이동은 native HTML5 `drop`에서 커밋되는데, `drop`은
+  // 직전 `dragover`에서 preventDefault가 있어야 발화한다. Crepe는 셀에만 걸어둬서
+  // 드래그 프리뷰 오버레이 위에서 떼면 drop이 안 떠 이동이 커밋되지 않는다 → 전역 보장.
+  // (dnd-kit 칸반/트리/리스트는 포인터 기반이라 영향 없음.)
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => e.preventDefault()
+    window.addEventListener('dragover', onDragOver)
+    return () => window.removeEventListener('dragover', onDragOver)
+  }, [])
+
   // 동기화 충돌 사본 감지: 같은 폴더에 "X.md"가 있는데 "X (n).md"도 있거나, 이름에 conflict 포함.
   useEffect(() => {
     const out: string[] = []
