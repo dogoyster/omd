@@ -25,8 +25,10 @@ import {
   deleteEntry,
   ensureDir,
   loadBoardFromDir,
+  mirrorVault,
   moveEntry,
   pathExists,
+  pickFolder,
   pickVault,
   readFile,
   renameEntry,
@@ -197,6 +199,11 @@ function App() {
   })
   const [conflicts, setConflicts] = useState<string[]>([])
   const [conflictDismissed, setConflictDismissed] = useState<Record<string, boolean>>({})
+  // 로컬 vault → Drive 폴더 미러링(백업)
+  const [mirrorEnabled, setMirrorEnabled] = useState(() => localStorage.getItem('omd.mirror.enabled') === 'true')
+  const [mirrorTarget, setMirrorTarget] = useState(() => localStorage.getItem('omd.mirror.target') ?? '')
+  const [mirrorLast, setMirrorLast] = useState<number>(() => Number(localStorage.getItem('omd.mirror.lastSync')) || 0)
+  const mirrorBusy = useRef(false)
 
   // window.prompt/confirm 대체 (Tauri 웹뷰 미지원) — Promise로 모달 결과를 기다린다
   function askInput(title: string, initial = ''): Promise<string | null> {
@@ -353,6 +360,46 @@ function App() {
     window.addEventListener('dragover', onDragOver)
     return () => window.removeEventListener('dragover', onDragOver)
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem('omd.mirror.enabled', String(mirrorEnabled))
+  }, [mirrorEnabled])
+  useEffect(() => {
+    localStorage.setItem('omd.mirror.target', mirrorTarget)
+  }, [mirrorTarget])
+
+  // 로컬 vault → Drive 폴더 미러링 실행 (변경분만 복사, 중복 실행 가드).
+  const runMirror = useCallback(async () => {
+    if (!vaultPath || !mirrorEnabled || !mirrorTarget || mirrorBusy.current) return
+    mirrorBusy.current = true
+    try {
+      await mirrorVault(mirrorTarget)
+      const t = Date.now()
+      setMirrorLast(t)
+      localStorage.setItem('omd.mirror.lastSync', String(t))
+    } catch (e) {
+      setError('백업 실패: ' + String(e))
+    } finally {
+      mirrorBusy.current = false
+    }
+  }, [vaultPath, mirrorEnabled, mirrorTarget])
+
+  // 주기(3분) + 창 blur(다른 앱 전환) 시 백업. 편집은 로컬에서만 일어나므로 안전.
+  useEffect(() => {
+    if (!mirrorEnabled || !mirrorTarget) return
+    const id = window.setInterval(() => void runMirror(), 180000)
+    const onBlur = () => void runMirror()
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [mirrorEnabled, mirrorTarget, runMirror])
+
+  async function pickMirrorTarget() {
+    const p = await pickFolder('백업 폴더 선택 — Drive 안의 폴더 권장')
+    if (p) setMirrorTarget(p)
+  }
 
   // 동기화 충돌 사본 감지: 같은 폴더에 "X.md"가 있는데 "X (n).md"도 있거나, 이름에 conflict 포함.
   useEffect(() => {
@@ -1082,8 +1129,14 @@ function App() {
           defaultDir={defaultDir}
           dirOptions={dirOptions}
           area={area}
+          mirrorEnabled={mirrorEnabled}
+          mirrorTarget={mirrorTarget}
+          mirrorLast={mirrorLast}
           onThemeChange={setTheme}
           onDefaultDirChange={setDefaultDir}
+          onMirrorToggle={setMirrorEnabled}
+          onPickMirrorTarget={() => void pickMirrorTarget()}
+          onSyncNow={() => void runMirror()}
           onClose={() => setSettingsOpen(false)}
         />
       )}

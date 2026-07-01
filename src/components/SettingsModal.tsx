@@ -14,8 +14,14 @@ interface Props {
   defaultDir: string
   dirOptions: string[]
   area: string
+  mirrorEnabled: boolean
+  mirrorTarget: string
+  mirrorLast: number
   onThemeChange: (t: Theme) => void
   onDefaultDirChange: (d: string) => void
+  onMirrorToggle: (v: boolean) => void
+  onPickMirrorTarget: () => void
+  onSyncNow: () => void
   onClose: () => void
 }
 
@@ -24,8 +30,14 @@ export function SettingsModal({
   defaultDir,
   dirOptions,
   area,
+  mirrorEnabled,
+  mirrorTarget,
+  mirrorLast,
   onThemeChange,
   onDefaultDirChange,
+  onMirrorToggle,
+  onPickMirrorTarget,
+  onSyncNow,
   onClose,
 }: Props) {
   useEffect(() => {
@@ -78,6 +90,40 @@ export function SettingsModal({
             </select>
             <ChevronDown className="select-caret" size={15} aria-hidden="true" />
           </div>
+        </section>
+
+        <section className="settings-row">
+          <label>
+            백업<span className="settings-hint"> · 로컬 vault → Drive 폴더 미러링</span>
+          </label>
+          <label className="mirror-toggle">
+            <input
+              type="checkbox"
+              checked={mirrorEnabled}
+              onChange={(e) => onMirrorToggle(e.target.checked)}
+            />
+            자동 백업 (다른 앱으로 전환 시 · 3분마다)
+          </label>
+          <div className="mirror-row">
+            <span className="mirror-path" title={mirrorTarget}>
+              {mirrorTarget || '백업 폴더 미선택'}
+            </span>
+            <button className="dialog-btn" onClick={onPickMirrorTarget}>
+              폴더 선택
+            </button>
+          </div>
+          <div className="mirror-row">
+            <span className="settings-hint">
+              마지막 백업: {mirrorLast ? new Date(mirrorLast).toLocaleString() : '없음'}
+            </span>
+            <button className="dialog-btn" onClick={onSyncNow} disabled={!mirrorTarget}>
+              지금 백업
+            </button>
+          </div>
+          <p className="settings-hint">
+            vault는 <b>로컬 폴더</b>에 두고 여기에 Drive 폴더를 지정하세요. 편집은 로컬에서만 일어나
+            동기화 충돌이 없습니다.
+          </p>
         </section>
 
         <div className="dialog-actions">

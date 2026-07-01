@@ -30,6 +30,17 @@ export async function pickVault(): Promise<string | null> {
   return typeof selected === 'string' ? selected : null
 }
 
+/** 임의 폴더 선택(백업 대상 등). 취소 시 null. */
+export async function pickFolder(title: string): Promise<string | null> {
+  const selected = await open({ directory: true, title })
+  return typeof selected === 'string' ? selected : null
+}
+
+/** 현재 vault를 대상 폴더로 미러링(로컬 → Drive 폴더 백업). 복사된 파일 수 반환. */
+export async function mirrorVault(targetAbs: string): Promise<number> {
+  return await invoke<number>('mirror_dir', { src: vaultRoot, dst: targetAbs })
+}
+
 export async function readFile(relPath: string): Promise<string> {
   return await readTextFile(abs(relPath))
 }
