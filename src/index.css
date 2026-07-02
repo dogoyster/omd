@@ -1287,6 +1287,10 @@ svg.lucide {
   gap: 8px;
   margin-bottom: 8px;
 }
+.mirror-row > .settings-hint {
+  flex: 1;
+  min-width: 0;
+}
 .mirror-path {
   flex: 1;
   min-width: 0;

@@ -27,6 +27,7 @@ interface Props {
   mirrorLast: number
   gitEnabled: boolean
   gitLast: number
+  gitInterval: number
   onThemeChange: (t: Theme) => void
   onDefaultDirChange: (d: string) => void
   onNewNoteNameChange: (v: string) => void
@@ -34,6 +35,7 @@ interface Props {
   onPickMirrorTarget: () => void
   onSyncNow: () => void
   onGitToggle: (v: boolean) => void
+  onGitIntervalChange: (min: number) => void
   onGitSyncNow: () => void
   onClose: () => void
 }
@@ -53,6 +55,7 @@ export function SettingsModal({
   mirrorLast,
   gitEnabled,
   gitLast,
+  gitInterval,
   onThemeChange,
   onDefaultDirChange,
   onNewNoteNameChange,
@@ -60,6 +63,7 @@ export function SettingsModal({
   onPickMirrorTarget,
   onSyncNow,
   onGitToggle,
+  onGitIntervalChange,
   onGitSyncNow,
   onClose,
 }: Props) {
@@ -189,8 +193,24 @@ export function SettingsModal({
                   checked={gitEnabled}
                   onChange={(e) => onGitToggle(e.target.checked)}
                 />
-                Git 자동 동기화 (실행 시 · 5분마다)
+                Git 자동 동기화 (실행 시 · 주기적으로 커밋+푸시)
               </label>
+              <div className="mirror-row">
+                <span className="settings-hint">자동 동기화 주기</span>
+                <div className="select-wrap" style={{ width: 110 }}>
+                  <select
+                    className="settings-select"
+                    value={gitInterval}
+                    onChange={(e) => onGitIntervalChange(Number(e.target.value))}
+                  >
+                    <option value={5}>5분</option>
+                    <option value={10}>10분</option>
+                    <option value={30}>30분</option>
+                    <option value={60}>60분</option>
+                  </select>
+                  <ChevronDown className="select-caret" size={15} aria-hidden="true" />
+                </div>
+              </div>
               <div className="mirror-row">
                 <span className="settings-hint">마지막 동기화: {fmt(gitLast)}</span>
                 <button className="dialog-btn" onClick={onGitSyncNow}>

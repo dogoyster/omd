@@ -229,6 +229,9 @@ function App() {
   // Git 동기화
   const [gitEnabled, setGitEnabled] = useState(() => localStorage.getItem('omd.git.enabled') === 'true')
   const [gitLast, setGitLast] = useState<number>(() => Number(localStorage.getItem('omd.git.lastSync')) || 0)
+  const [gitInterval, setGitInterval] = useState<number>(
+    () => Number(localStorage.getItem('omd.git.intervalMin')) || 5,
+  )
   const gitBusy = useRef(false)
   // 새 노트 기본 이름 템플릿 (비우면 '무제')
   const [newNoteName, setNewNoteName] = useState(() => localStorage.getItem('omd.newNoteName') ?? '')
@@ -435,6 +438,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem('omd.git.enabled', String(gitEnabled))
   }, [gitEnabled])
+  useEffect(() => {
+    localStorage.setItem('omd.git.intervalMin', String(gitInterval))
+  }, [gitInterval])
 
   // Git 동기화 실행 (add→commit→pull→push, 중복 가드).
   const runGitSync = useCallback(async () => {
@@ -452,13 +458,13 @@ function App() {
     }
   }, [vaultPath, gitEnabled])
 
-  // 켤 때/실행 시 1회(=pull 포함) + 5분마다. blur 제외(push가 너무 잦아짐).
+  // 켤 때/실행 시 1회(=pull 포함) + 설정 주기마다. blur 제외(push가 너무 잦아짐).
   useEffect(() => {
     if (!gitEnabled) return
     void runGitSync()
-    const id = window.setInterval(() => void runGitSync(), 300000)
+    const id = window.setInterval(() => void runGitSync(), Math.max(1, gitInterval) * 60000)
     return () => window.clearInterval(id)
-  }, [gitEnabled, runGitSync])
+  }, [gitEnabled, gitInterval, runGitSync])
 
   // 동기화 충돌 사본 감지: 같은 폴더에 "X.md"가 있는데 "X (n).md"도 있거나, 이름에 conflict 포함.
   useEffect(() => {
@@ -1197,6 +1203,7 @@ function App() {
           mirrorLast={mirrorLast}
           gitEnabled={gitEnabled}
           gitLast={gitLast}
+          gitInterval={gitInterval}
           onThemeChange={setTheme}
           onDefaultDirChange={setDefaultDir}
           onNewNoteNameChange={setNewNoteName}
@@ -1204,6 +1211,7 @@ function App() {
           onPickMirrorTarget={() => void pickMirrorTarget()}
           onSyncNow={() => void runMirror()}
           onGitToggle={setGitEnabled}
+          onGitIntervalChange={setGitInterval}
           onGitSyncNow={() => void runGitSync()}
           onClose={() => setSettingsOpen(false)}
         />
