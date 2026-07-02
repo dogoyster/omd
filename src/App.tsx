@@ -24,6 +24,7 @@ import {
   createFile,
   deleteEntry,
   ensureDir,
+  gitSync,
   loadBoardFromDir,
   mirrorVault,
   moveEntry,
@@ -74,6 +75,27 @@ function sanitizeName(s: string): string {
  * .md를 먼저 떼지 않으면 "files.md" 같은 H1이 "files.md.md" 파일을 만든다. */
 function slugify(title: string): string {
   return sanitizeName(stripMd(title)).replace(/\s+/g, '-')
+}
+
+/** 새 노트 기본 이름 템플릿의 날짜/시간 토큰을 현재 시각으로 치환.
+ * 지원 토큰: {YYYY}{MM}{DD}{HH}{mm}{ss} · {date}=YYYY-MM-DD · {time}=HH:mm · {datetime}. */
+function resolveNameTemplate(tpl: string): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  const YYYY = String(d.getFullYear())
+  const [MM, DD, HH, mm, ss] = [d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()].map(p)
+  const map: Record<string, string> = {
+    YYYY,
+    MM,
+    DD,
+    HH,
+    mm,
+    ss,
+    date: `${YYYY}-${MM}-${DD}`,
+    time: `${HH}:${mm}`,
+    datetime: `${YYYY}-${MM}-${DD} ${HH}:${mm}`,
+  }
+  return tpl.replace(/\{(YYYY|MM|DD|HH|mm|ss|date|time|datetime)\}/g, (_, k) => map[k] ?? '').trim()
 }
 
 /** tree에서 path로 노드 찾기 (reload 후에도 최신 노드 참조). */
@@ -204,6 +226,12 @@ function App() {
   const [mirrorTarget, setMirrorTarget] = useState(() => localStorage.getItem('omd.mirror.target') ?? '')
   const [mirrorLast, setMirrorLast] = useState<number>(() => Number(localStorage.getItem('omd.mirror.lastSync')) || 0)
   const mirrorBusy = useRef(false)
+  // Git 동기화
+  const [gitEnabled, setGitEnabled] = useState(() => localStorage.getItem('omd.git.enabled') === 'true')
+  const [gitLast, setGitLast] = useState<number>(() => Number(localStorage.getItem('omd.git.lastSync')) || 0)
+  const gitBusy = useRef(false)
+  // 새 노트 기본 이름 템플릿 (비우면 '무제')
+  const [newNoteName, setNewNoteName] = useState(() => localStorage.getItem('omd.newNoteName') ?? '')
 
   // window.prompt/confirm 대체 (Tauri 웹뷰 미지원) — Promise로 모달 결과를 기다린다
   function askInput(title: string, initial = ''): Promise<string | null> {
@@ -400,6 +428,37 @@ function App() {
     const p = await pickFolder('백업 폴더 선택 — Drive 안의 폴더 권장')
     if (p) setMirrorTarget(p)
   }
+
+  useEffect(() => {
+    localStorage.setItem('omd.newNoteName', newNoteName)
+  }, [newNoteName])
+  useEffect(() => {
+    localStorage.setItem('omd.git.enabled', String(gitEnabled))
+  }, [gitEnabled])
+
+  // Git 동기화 실행 (add→commit→pull→push, 중복 가드).
+  const runGitSync = useCallback(async () => {
+    if (!vaultPath || !gitEnabled || gitBusy.current) return
+    gitBusy.current = true
+    try {
+      await gitSync()
+      const t = Date.now()
+      setGitLast(t)
+      localStorage.setItem('omd.git.lastSync', String(t))
+    } catch (e) {
+      setError('Git 동기화 실패: ' + String(e))
+    } finally {
+      gitBusy.current = false
+    }
+  }, [vaultPath, gitEnabled])
+
+  // 켤 때/실행 시 1회(=pull 포함) + 5분마다. blur 제외(push가 너무 잦아짐).
+  useEffect(() => {
+    if (!gitEnabled) return
+    void runGitSync()
+    const id = window.setInterval(() => void runGitSync(), 300000)
+    return () => window.clearInterval(id)
+  }, [gitEnabled, runGitSync])
 
   // 동기화 충돌 사본 감지: 같은 폴더에 "X.md"가 있는데 "X (n).md"도 있거나, 이름에 conflict 포함.
   useEffect(() => {
@@ -671,12 +730,15 @@ function App() {
     // 파일명은 임시('무제…'); 제목을 입력해 저장하면 H1→파일명 동기화로 자동 변경된다.
     const dir = `${area}/${defaultDir || 'Inbox'}` // 설정의 기본 폴더(없으면 Inbox)
     const today = new Date().toISOString().slice(0, 10)
-    const content = `---\nproject: \npriority: mid\ncreated: ${today}\ndue: \ntags: []\nsource: \n---\n\n# \n`
+    const title = resolveNameTemplate(newNoteName) // 템플릿 비면 '' → 빈 제목('무제')
+    const slug = slugify(title)
+    const content = `---\nproject: \npriority: mid\ncreated: ${today}\ndue: \ntags: []\nsource: \n---\n\n# ${title}\n`
     try {
       await ensureDir(dir)
-      let name = '무제.md'
+      const base = slug || '무제'
+      let name = `${base}.md`
       let n = 2
-      while (await pathExists(`${dir}/${name}`)) name = `무제 ${n++}.md`
+      while (await pathExists(`${dir}/${name}`)) name = `${base} ${n++}.md`
       await createFile(dir, name, content)
       navigate({ view: 'editor', docPath: `${dir}/${name}`, dirPath: dir, dirMode: active.dirMode })
       await reload()
@@ -1129,14 +1191,20 @@ function App() {
           defaultDir={defaultDir}
           dirOptions={dirOptions}
           area={area}
+          newNoteName={newNoteName}
           mirrorEnabled={mirrorEnabled}
           mirrorTarget={mirrorTarget}
           mirrorLast={mirrorLast}
+          gitEnabled={gitEnabled}
+          gitLast={gitLast}
           onThemeChange={setTheme}
           onDefaultDirChange={setDefaultDir}
+          onNewNoteNameChange={setNewNoteName}
           onMirrorToggle={setMirrorEnabled}
           onPickMirrorTarget={() => void pickMirrorTarget()}
           onSyncNow={() => void runMirror()}
+          onGitToggle={setGitEnabled}
+          onGitSyncNow={() => void runGitSync()}
           onClose={() => setSettingsOpen(false)}
         />
       )}

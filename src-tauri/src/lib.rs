@@ -52,6 +52,41 @@ fn mirror_dir(src: String, dst: String) -> Result<usize, String> {
     mirror(Path::new(&src), Path::new(&dst)).map_err(|e| e.to_string())
 }
 
+/// vault 디렉토리에서 git 동기화: add → commit(변경 없으면 통과) → pull --rebase → push.
+/// vault가 git 저장소이고 원격·인증이 설정돼 있어야 한다. 로그/오류 문자열 반환.
+#[tauri::command]
+fn git_sync(dir: String) -> Result<String, String> {
+    fn git(dir: &str, args: &[&str]) -> Result<(bool, String), String> {
+        let out = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git 실행 실패(설치·PATH 확인): {e}"))?;
+        let mut log = String::from_utf8_lossy(&out.stdout).into_owned();
+        log.push_str(&String::from_utf8_lossy(&out.stderr));
+        Ok((out.status.success(), log))
+    }
+    let (is_repo, _) = git(&dir, &["rev-parse", "--is-inside-work-tree"])?;
+    if !is_repo {
+        return Err("git 저장소가 아니에요. vault 폴더에서 `git init` + 원격(remote) 설정을 먼저 하세요.".into());
+    }
+    let mut log = String::new();
+    git(&dir, &["add", "-A"])?; // 변경 스테이징
+    let (_ok, c) = git(&dir, &["commit", "-m", "omd: sync"])?; // 변경 없으면 실패하지만 무시
+    log.push_str(&c);
+    let (pull_ok, p) = git(&dir, &["pull", "--rebase", "--autostash"])?;
+    log.push_str(&p);
+    if !pull_ok {
+        return Err(format!("pull 실패(충돌 또는 원격 미설정?):\n{log}"));
+    }
+    let (push_ok, pu) = git(&dir, &["push"])?;
+    log.push_str(&pu);
+    if !push_ok {
+        return Err(format!("push 실패(원격/인증 확인 — `git push -u origin <branch>` 1회 필요할 수 있음):\n{log}"));
+    }
+    Ok(log)
+}
+
 /// 파일/폴더를 OS 휴지통으로 이동. 영구삭제(std::fs::remove)와 달리
 /// 복구 가능하고, Google Drive 같은 클라우드 가상 볼륨에서도 정상 동작한다.
 #[tauri::command]
@@ -78,7 +113,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![move_to_trash, open_window, mirror_dir])
+        .invoke_handler(tauri::generate_handler![
+            move_to_trash,
+            open_window,
+            mirror_dir,
+            git_sync
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

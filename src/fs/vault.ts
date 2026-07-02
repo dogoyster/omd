@@ -41,6 +41,11 @@ export async function mirrorVault(targetAbs: string): Promise<number> {
   return await invoke<number>('mirror_dir', { src: vaultRoot, dst: targetAbs })
 }
 
+/** vault(git 저장소)에서 add→commit→pull(rebase)→push. 로그 반환(오류 시 throw). */
+export async function gitSync(): Promise<string> {
+  return await invoke<string>('git_sync', { dir: vaultRoot })
+}
+
 export async function readFile(relPath: string): Promise<string> {
   return await readTextFile(abs(relPath))
 }

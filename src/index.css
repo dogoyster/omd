@@ -1170,12 +1170,47 @@ svg.lucide {
 /* ---- 설정 모달 ---- */
 .settings-modal {
   width: 90%;
-  max-width: 420px;
+  max-width: 470px;
   padding: 20px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.settings-tabs {
+  padding: 0;
+  margin-bottom: 16px;
+}
+.settings-sub {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+.settings-input {
+  width: 100%;
+  padding: 8px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.settings-input:focus {
+  border-color: var(--accent);
+}
+.settings-hint code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-sunken);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.settings-row + .settings-row {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
 }
 .settings-title {
   font-size: 16px;
