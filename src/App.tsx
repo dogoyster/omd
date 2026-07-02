@@ -1037,6 +1037,7 @@ function App() {
         onSelect={openNode}
         onOpenDir={handleOpenDir}
         onNewTopDir={() => void handleNewTopDir()}
+        onRefresh={() => void reload()}
         onMove={handleTreeMove}
         onReconnect={() => void connect()}
         onSearch={() => void openSearch()}

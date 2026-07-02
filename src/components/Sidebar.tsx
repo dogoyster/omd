@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { FolderInput, FolderPlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
+import { FolderInput, FolderPlus, PanelLeftClose, Plus, RefreshCw, Search, Settings } from 'lucide-react'
 import type { Area, TreeNode } from '../types'
 import { stripMd } from '../names'
 import { FileTreeView } from './FileTreeView'
@@ -18,6 +18,7 @@ interface Props {
   onSelect: (node: TreeNode, newTab?: boolean) => void
   onOpenDir: (node: TreeNode, newTab?: boolean) => void
   onNewTopDir: () => void
+  onRefresh: () => void
   onMove: (srcPath: string, toDirPath: string) => void
   onReconnect: () => void
   onSearch: () => void
@@ -37,6 +38,7 @@ export function Sidebar({
   onSelect,
   onOpenDir,
   onNewTopDir,
+  onRefresh,
   onMove,
   onReconnect,
   onSearch,
@@ -93,6 +95,9 @@ export function Sidebar({
 
       <div className="tree-head">
         <span className="tree-head-label">폴더</span>
+        <button className="tree-add-btn" title="새로고침" onClick={onRefresh} aria-label="새로고침">
+          <RefreshCw size={14} />
+        </button>
         <button className="tree-add-btn" title="새 최상위 폴더" onClick={onNewTopDir} aria-label="새 폴더">
           <FolderPlus size={15} />
         </button>
